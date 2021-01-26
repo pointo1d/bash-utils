@@ -44,18 +44,21 @@ export BASH_UTILS_TEST_LIB=$BASH_UTILS_TEST_LIB_DIR/lib.sh
 
 # Test harness global list
 declare GlobalFieldPrintLength=0 TestGlobals=(
+  TEST_ROOT_PID=$BASHPID
   TEST_SCRIPT TEST_OUT TEST_FAIL_FAST TEST_VERBOSE
-  TEST_DEFN TEST_EXIT_CODE TEST_OUTPUT TEST_STDOUT TEST_STDERR
-  TEST_RESULTS TEST_RESULTS_COLOURED
+  TEST_DEFN TEST_EXIT_CODE TEST_OUTPUT TEST_STDOUT_CAPTURE TEST_STDERR_CAPTURE
+  TEST_RUNNER_CONTEXT TEST_RESULTS TEST_RESULTS_COLOURED
 )
+# Having now defined the test globals, ensure that both they're exported and
+# their lenght is known (for formatted printing/reporting
 declare gv ; for gv in ${TestGlobals[@]} ; do
   export $gv
-#    local var longest=0 ; for var in ${TestGlobals[@]} ; do
   case $(($GlobalFieldPrintLength - ${#gv})) in
     -*) GlobalFieldPrintLength=${#gv} ;;
   esac
 done
 
+# Ensure the field print length is properly asjusted and constant
 ((GlobalFieldPrintLength += 2))
 readonly GlobalFieldPrintLength
 
@@ -142,7 +145,7 @@ test.lib.tempfile() {
 test-runner.propagate-vars() {
   local var_names=(
     BASH_XTRACEFD
-    TEST_STDERR TEST_STDOUT TEST_FAIL_FAST TEST_VERBOSE TEST_SUBSHELL_RESULTS
+    TEST_STDERR_CAPTURE TEST_STDOUT_CAPTURE TEST_FAIL_FAST TEST_VERBOSE TEST_SUBSHELL_RESULTS
   )
 
   local var val ; for var in ${var_names[@]} ; do
@@ -313,6 +316,44 @@ test-runner.propagate-vars() {
 #  echo -e "\r${TEST_DEFN[outcome]} ${TEST_DEFN[num]} ${TEST_DEFN[desc]}"
 #}
 
+run-command() {
+  # Get the code of the arg stack
+  local code="${1:?'No code to excute'}"
+
+  export TEST_STDERR_CAPTURE=$(tempfile) TEST_STDOUT_CAPTURE=$(tempfile)
+  trap "rm -f $TEST_STDERR_CAPTURE $TEST_STDOUT_CAPTURE" EXIT
+
+  # Now the current state of the strictures ... following which, disable them in
+  # order to facilitate handling of errors at this level. - use shopt(1) for
+  # readability (don't need to specify +o for each option as would be the case
+  # with set(1))
+  local strictures="$(shopt -po errexit errtrace nounset pipefail)"
+  shopt -uo errexit errtrace nounset pipefail
+  
+  (
+    exec -c \
+    env -i \
+      PATH=$(getconf PATH) \
+      BASH_XTRACEFD=${BASH_XTRACEFD:-} \
+      TEST_STDERR_CAPTURE=$TEST_STDERR_CAPTURE \
+      TEST_STDOUT_CAPTURE=$TEST_STDOUT_CAPTURE \
+      strictures="$strictures" \
+    bash <<EOC
+      trap -p
+      exec 1>$TEST_STDERR_CAPTURE 2>$TEST_STDOUT_CAPTURE
+      eval $strictures
+
+      $code
+EOC
+  )
+
+  export TEST_EXIT_CODE=$?
+
+  # Having now setup the environment for the callers' testing, re-assert the
+  # strictures
+  eval $Strictures
+}
+
 #-------------------------------------------------------------------------------
 # Function:     test.campaign.init()
 # Description:  
@@ -341,7 +382,7 @@ test.campaign.init() {
 # Description:  
 #-------------------------------------------------------------------------------
 test.campaign.start() {
-case ${TEST_OUT:+y} in y) return ;; esac
+  case ${TEST_OUT:+y} in y) return ;; esac
   echo "TAP Version $TapVersion"
 }
 
@@ -361,268 +402,10 @@ Failed $failed/$total tests, ${okay}% okay
 "
 }
 
-################################################################################
-####  INDIVIDUAL TEST ASSERTIONS
-################################################################################
-#-------------------------------------------------------------------------------
-# Function:     test.assert.ok()
-# Description:  Base routine asserting that the given condition holds true,
-#               where true is interpreted as either eval'lable code that returns
-#               true i.e. 0, when either run or eval'led or an integer value of
-#               0.
-# Takes:        -t TYP      - option to force the type/nature of the condition
-#                             to be explicit - as one of the following (case
-#                             insensitive)...
-#                             * CODE  - run'lable code.
-#                             * EVAL  - eval'lable code.
-#                             * INT   - one, or more digits.
-#                             * STR   - anything other than the above.
-#                             By default, i.e. if '-t TYP' is not used, the
-#                             assumption is made that the condition is
-#                             eval'lable code.
-#               $1          - the condition to be tested.
-#               $2          - a description of the test.
-#               $3          - optional diagnostic code - eval'led iff the given
-#                             code does not hold true i.e. the given assertion
-#                             fails.
-# Returns:      None.
-# Variables:    $TEST_DEFN  - the test data definition.
-#-------------------------------------------------------------------------------
-test.assert.ok() {
-  local OPTARG OPTIND opt cond_type
-  while getopts 't:' opt ; do
-    case $opt in
-      t)  case ${OPTARG,,} in
-            int|\
-            str|\
-            code|\
-            eval) cond_type=$OPTARG ;;
-          esac
-          ;;
-    esac
-  done
-
-  shift $((OPTIND - 1))
-
-  test.state.init "$1" "$2" "$3"
-
-  test.lib.run-it "$cond_type"
-
-  test.lib.result
-}
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-test.assert.ok() {
-  local desc="${1:?'No description'}" code="${2?'No condition code'}" \
-    colour=
-  case ${PS1:+y}:${TEST_RESULTS_COLOURED:+y} in *y*) colour=t ;; *) ;; esac
-
-  echo -en "$desc"
-
-  local rc=$( set +eE ; eval $code ; echo $? )
-
-  : $((Stats[total] += 1))
-
-  case $rc in
-    0)  : $((Stats[passed] += 1))
-        colour=${colour:+"\u001b[32m"}
-        res=ok
-        ;;
-    *)  : $((Stats[failed] += 1))
-        colour=${colour:+"\u001b[31m"}
-        res="not ok"
-        ;;
-  esac
-
-  echo -e "\r${colour:+$colour}$res - $desc${colour:+\u001b[0m}"
-
-  case "$res" in ok) return ;; esac
-
-  test.diag " Failure condition: $code"
-}
-
 test.script.done() {
   echo "1..${Stats[total]}"
 }
 
-#-------------------------------------------------------------------------------
-# Function:     test.extend-trap()
-# Description:  Function to append the given code to the given trap
-# Takes:        $1  - signal name or number (integer :)
-#               $*  - the code with which to extend the trap for the given
-#                     signal
-# Returns:      None
-# Variables:    None
-#-------------------------------------------------------------------------------
-test.extend-trap() {
-  local sig=${1:?'No sig name or number'} traps=() code=() ; shift
-
-  # Get the current trap defn & extract the code therefrom
-  traps=($(trap -p $sig)) ; code="${traps[@]:2:${#traps[@]} - 3}"
-
-  # Now 'do; the update
-  eval "trap -- '$@ ;'$code $sig $sig"
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.runner.tear-down()
-# Description:  Function, as it says on the tin, to perform the/any tear-down
-#               required for test.runner.run-command().
-# Takes:        None
-#               None
-# Returns:      None
-# Variables:    $TEST_RUNNER  - determines whether test.runner.run-command() was
-#                               run in self-contained mode.
-#-------------------------------------------------------------------------------
-test.runner.tear-down() {
-  :
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.test-runner.stand-up()
-# Description:  Routine, as it says on the tin, to stand-up a self-contained
-#               stand-alone test harness environment - typically as created by a
-#               call to test.run-command() -t.
-# Takes:        None
-# Returns:      None
-# Variables:    $TEST_RUNNER  - determines whether test.runner.run-command() is
-#                               to be run in self-contained mode.
-#-------------------------------------------------------------------------------
-test.test-runner.stand-up() {
-  test.extend-trap EXIT test.runner.tear-down
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.run-command()
-# Description:  Routine to run the given command in a virgin environment i.e.
-#               minimal PATH (as defined by getconf(1)). The exit code, stdout &
-#               stderr are all captured in global env vars (see below).
-# Takes:        -t  - specify that the command is to be run as a self-contained
-#                     test harness i.e. load this library and run the code
-#                     using test.* functions. The result of the run will be 
-# Returns:      None directly.
-# Variables:    TEST_STDOUT           -
-#                 Name of the ephemeral stdout capture file.
-#               TEST_STDERR           -
-#                 Name of the ephemeral stderr capture file.
-#               BASH_XTRACEFD         -
-#                 if set, defines the file descriptor to which xtrace output is
-#                 redirected
-#               TEST_SUBSHELL_RESULTS -
-#                 FD for the stream to which the results are reported if running
-#                 under self-contained test harness i.e. '-t', conditions.
-#-------------------------------------------------------------------------------
-test.run-command() {
-  local OPTARG OPTIND opt
-  while getopts 't' opt ; do
-    case $opt in
-      t)  export TEST_RUNNER=t ;;
-    esac
-  done
-
-  shift $((OPTIND - 1)) ; local code="${1:?'No code to run'}"
-
-  case ${TEST_RUNNER:+y} in
-    y)  code=". $BASH_UTILS_TEST_LIB ; test.test-runner.stand-up ; $code"
-        ;;
-    *)  shopt="$(shopt -p ; shopt -op)" 
-        TEST_STDERR=$(tempfile) TEST_STDOUT=$(tempfile)
-        trap "rm -f $TEST_STDERR $TEST_STDOUT" EXIT
-  esac
-
-  # Whatever happens, any errors stemming from the following must be handled by
-  # the harness, so disable fast-fail until the outcome has been
-  # established i.e. later.
-  local shopt="$(shopt -op errexit ; shopt -p inherit_errexit)"
-  shopt -ou errexit ; shopt -u inherit_errexit
-
-  (
-    set +u
-    local globals="$(
-      PS4="$PS4"
-      for gv in ${TestGlobals[@]} ; do echo "$gv='${!gv}'" ; done
-    )"
-
-    exec -c \
-    env -i PATH=$(getconf PATH) \
-      BASH_XTRACEFD=${BASH_XTRACEFD:-} TEST_RUNNER=t $globals \
-    bash -$- <<EOC
-      exec >${TEST_STDOUT:-/dev/stdout} 2>${TEST_STDERR:-/dev/stderr}
-
-      #echo $TEST_FAIL_FAST >&$TEST_RESULTS
-      $code
-EOC
-  )
-
-  export TEST_EXIT_CODE=$? TEST_STDERR TEST_STDOUT \
-    TEST_OUTPUT="$(<${TEST_STDERR:-/dev/null})$(<${TEST_STDOUT:-/dev/null})"
-
-  eval $shopt
-}
-
-################################################################################
-####  TEST CASE ASSERTIONS
-################################################################################
-#-------------------------------------------------------------------------------
-# Function:     test.case.assert.syntax-ok()
-# Description:  Test case asserting the correct syntax for the TEST_OUT.
-# Takes:        $1          - optional out path name, default given in/by $TEST_OUT.
-# Returns:      None.
-# Variables:    $TEST_OUT        - the path name for the TEST_OUT.
-#               $TEST_DEFN  - the test data definition,
-#-------------------------------------------------------------------------------
-test.case.assert.syntax-ok() {
-  test.lib.safe-run -qon -ceo "${1:?'No TEST_OUT'}"
-
-  test.assert.ok "test ${TEST_DEFN[rc]} = 0" 'Syntax check - rc' '0'
-  test.assert.ok "test '$(< ${TEST_DEFN[stderr]})' = ''" \
-    'Syntax check - STDERR' "$(< ${TEST_DEFN[stderr]})"
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.case.assert.dots-ok()
-# Description:  Test case asserting that the TEST_OUT can be dot'ted/source'd ok.
-# Takes:        $1          - optional out path name, default given in/by $TEST_OUT.
-# Returns:      None.
-# Variables:    $TEST_OUT        - the path name for the TEST_OUT.
-#               $TEST_DEFN  - the test data definition,
-#-------------------------------------------------------------------------------
-test.case.assert.dots-ok() {
-  test.lib.safe-run -q -ceo ". ${1:?'No TEST_OUT'}"
-
-  test.assert.ok "test ${TEST_DEFN[rc]} = 0" 'dotted file - rc' '0'
-  test.assert.ok "[[ '$(< ${TEST_DEFN[stdout]})' =~ TAP\ Version\ \d+ ]]" \
-    'dotted file - STDOUT' "$(<${TEST_DEFN[stdout]})"
-  test.assert.ok "test '$(< ${TEST_DEFN[stderr]})'" \
-    'dotted file - STDERR' "$(<${TEST_DEFN[stderr]})"
-}
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-test.assert.command.exit-code.success() {
-  local extra_desc="${1:-}"
-  test.assert.ok \
-    "Success exit code${extra_desc:+ - $extra_desc}" \
-    "test $TEST_EXIT_CODE = 0"
-}
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-test.assert.command.exit-code.fail() {
-  local extra_desc="$1" val=$2
-  local desc="Fail exit code${extra_desc:+ - $extra_desc}"
-
-  case ${val:-y} in
-    y)  test.assert.ok 'Fail exit code' \
-          "test $TEST_EXIT_CODE = $val"
-        ;; 
-    *)  test.assert.ok '${desc//F/Specific f' \
-          "test $TEST_EXIT_CODE != 0"
-        ;;
-  esac
-}
 
 #-------------------------------------------------------------------------------
 # Function:     test.script.start()
@@ -643,9 +426,20 @@ test.script.start() {
     v*)  (
             set +ueE
             local var ; while read var ; do
-              val=${!var}
+              local val=unset
+              : $var
+              case "${var:-n}" in
+                n)    continue ;;
+                *=*)  val=${var#*=}
+                      var=${var%=*}
+                      ;;
+                *)    val=${!var}
+                      ;;
+              esac
+
               test.diag "$(
-                printf '%-'${GlobalFieldPrintLength}'s- %s' $var ${val:-unset}
+                printf '%-'${GlobalFieldPrintLength}'s- %s' \
+                  $var ${val:-unset}
               )"
             done < <(printf '%s\n' ${TestGlobals[@]} | sort)
         )
@@ -653,73 +447,7 @@ test.script.start() {
   esac
 }
 
-#-------------------------------------------------------------------------------
-# Function:     test.assert.lib._get-file-or-string()
-# Description:  Private utility function to determine if the given argument is a
-#               plain string or the name of a file and return either the string
-#               or the contents of the named file.
-# Takes:        $1  - either a string or the name of a file containing a string
-# Returns:      the string or the contents of the file via STDOUT
-# Variables:    None
-#-------------------------------------------------------------------------------
-test.assert.lib._get-file-or-string() {
-  case $(test.lib.path-exists ${1:?'Neither string or filename'}) in
-    y) cat $OPTARG ;; n) echo "$OPTARG" ;;
-  esac
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.assert.command.output-content()
-# Description:  Test runner output related assertion - asserting the expectation
-#               WRT the/any generated output on STDERR &/or STDOUT. Note that,
-#               if neither is given, then the captures MUST both be empty -
-#               which has exactly the same affect as merely calling
-#               test.assert.command.output-empty().
-# Takes:        -e STR  - if given, STR is either a string or the name of a file
-#                         containing a string captured from STDERR.
-#               -o STR  - if given, STR is either a string or the name of a file
-#                         containing a string captured from STDOUT.
-# Returns:      
-# Variables:    $TEST_STDERR -
-#               $TEST_STDOUT -
-#-------------------------------------------------------------------------------
-test.assert.command.output-content() {
-  local OPTARG OPTIND opt desc=
-  local -A streams=( [stderr]='' stdout='' )
-
-  while getopts 'e:o:' opt ; do
-    case $opt in
-      e)  streams[stderr]="$(test.assert.lib._get-file-or-string $OPTARG)" ;;
-      o)  streams[stdout]="$(test.assert.lib._get-file-or-string $OPTARG)" ;;
-    esac
-  done
-
-  shift $((OPTIND - 1))
-
-  local key ; for key in ${!streams[@]} ; do
-    local stream=TEST_${key^^}
-    test.assert.ok "Output ${key^^}${1:+ - $1}" \
-        "test '$(<${!stream})' = '${streams[$key]}'"
-  done
-}
-
-#-------------------------------------------------------------------------------
-# Function:     test.assert.command.output-empty()
-# Description:  Asserts that no generated output was 'seen' on either STDOUT or
-#               STDERR.
-# Takes:        -s VAR  - if given, specifies the name of the status for which
-#                         the results s/b updated, default - $TEST_RESULTS
-#               $*      - if given, STDERR & STDOUT capture file names, 
-#                         default - $TEST_STDERR $TEST_STDOUT
-# Returns:      None
-# Variables:    ${!VAR} - the name of the test status containing the assertion
-#-------------------------------------------------------------------------------
-test.assert.command.output-empty() {
-  local OPTARG OPTIND opt desc="Empty STDERR & STDOUT" \
-    output="$(<${1:-$TEST_STDERR})$(<${2:-$TEST_STDOUT})"
-
-  test.assert.ok "Empty STDOUT & STDERR${1:+ - $1}" "test '$output' = ''"
-}
+. ${BASH_SOURCE//lib./assert.}
 
 test.campaign.start
 
