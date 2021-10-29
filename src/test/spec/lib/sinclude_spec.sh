@@ -1,25 +1,27 @@
 FNAME=lib.sinclude ; LNAME=${FNAME//./\/}
 
 Describe "$FNAME ($LNAME) - $BASH_SOURCE"
-  Include ../main/$LNAME.sh
+  Include src/main/$LNAME.sh
 
   call-it() { eval $@ ; }
 
   Describe 'no paths is fatal'
     Parameters
+      lib.sinclude
       .
       source
     End
 
-    Example "BP: '$1' is fatal - no path(s)"
+    Example "BP: no path(s) is fatal"
       When run call-it $1
       The stderr should include 'Nothing to load'
       The status should not equal 0
     End
   End
 
-  Describe 'not existant file is fatal'
+  Describe 'non-existant file is fatal'
     Parameters
+      lib.sinclude not-exist
       . not-exist
       source not-exist
     End
@@ -33,8 +35,10 @@ Describe "$FNAME ($LNAME) - $BASH_SOURCE"
 
   Describe 'existing file is included successfully - silently'
     Parameters
+      lib.sinclude exist
       . exist
       source exist
+      lib.sinclude exist.sh
       . exist.sh
       source exist.sh
     End
@@ -51,8 +55,10 @@ Describe "$FNAME ($LNAME) - $BASH_SOURCE"
 
   Describe 'existing file is included only once successfully - silently'
     Parameters
+      lib.sinclude exist
       . exist
       source exist
+      lib.sinclude exist.sh
       . exist.sh
       source exist.sh
     End
@@ -69,8 +75,10 @@ Describe "$FNAME ($LNAME) - $BASH_SOURCE"
 
   Describe 'existing file is included successfully - verbosely'
     Parameters
+      lib.sinclude exist
       . exist
       source exist
+      lib.sinclude exist.sh
       . exist.sh
       source exist.sh
     End
@@ -87,8 +95,10 @@ Describe "$FNAME ($LNAME) - $BASH_SOURCE"
 
   Describe 'existing file is included only once successfully - verbosely'
     Parameters
+      lib.sinclude exist
       . exist
       source exist
+      lib.sinclude exist.sh
       . exist.sh
       source exist.sh
     End
@@ -100,6 +110,24 @@ Describe "$FNAME ($LNAME) - $BASH_SOURCE"
       rm /tmp/$2
       The status should equal 0
       The output should match pattern 'Load * Done'
+    End
+  End
+
+  Describe 'local i.e. bash-utils, library file(s)'
+    Parameters
+      lib.sinclude path
+      . path
+      source path
+      lib.sinclude console/help
+      . console/help
+      source console/help
+    End
+
+    Example "$1 $2"
+      When run $1 $2
+      The output should equal ''
+      The stderr should equal ''
+      The status should equal 0
     End
   End
 End
