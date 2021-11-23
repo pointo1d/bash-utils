@@ -3,7 +3,7 @@ LNAME=src/main/${FNNAME//./\/}.sh
 FNNAME=$FNNAME.lookup
 Prefix=$(case $(uname -o) in Msys) echo _ ;; esac)
 
-Describe "Unit test suite for $FNNAME() ..."
+Describe "Unit test suite for $FNNAME() (in $LNAME)"
   Include $LNAME
 
   call-it() {
