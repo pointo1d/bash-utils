@@ -104,9 +104,9 @@ lib.netrc.exists() {
 # Notes:        * The listing is on STDOUT.
 #-------------------------------------------------------------------------------
 lib.netrc.validate-var-name() {
-  local vname=${1:-$Defaults[VarName]}
+  local vname=${1:-${Defaults[VarName]}}
 
-  case "$(lib.netrc.exists -B $vname)" in
+  case "$(lib.netrc.exists -l $vname)" in
     declare\ -A*) : ;;
     declare\ -*)  lib.console.die 127 "Var wrong type - expected '-A'" ;;
     *)            lib.console.die 127 "Var not found: '$vname'" ;;
