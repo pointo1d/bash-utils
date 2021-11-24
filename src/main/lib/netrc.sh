@@ -97,14 +97,22 @@ lib.netrc.exists() {
 # Description:  Function to list the hosts defined in the given/default env
 #               var in the order that they would appear as if in a netrc
 #               file i.e. 'default', if defined, is last.
-# Opts:         None
-# Args:         $1  - specify the env var name, default - $Defaults[VarName]
+# Opts:         -v STR  - specify alternate env var name, default -
+#                         $Defaults[VarName]
+# Args:         None
 # Returns:      None
 # Env Vars:     $Defaults[VarName] - $NETRC
 # Notes:        * The listing is on STDOUT.
 #-------------------------------------------------------------------------------
 lib.netrc.validate-var-name() {
-  local vname=${1:-${Defaults[VarName]}}
+  local OPTARG OPTIND opt vname=${Defaults[VarName]}
+  while getopts 'v:' opt ; do
+    case $opt in
+      v)  vname=$OPTARG ;;
+    esac
+  done
+
+  shift $((OPTIND - 1))
 
   case "$(lib.netrc.exists -l $vname)" in
     declare\ -A*) : ;;
