@@ -24,14 +24,19 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
   Describe 'Off-norm i.e. bad path, behaviours'
     It '- non-extant var'
-      When run $FNNAME -v fred
+      When run $FNNAME
       The status should be failure
       The stdout should equal ''
-      The stderr should include "Var not found: 'fred'"
+      The stderr should include "Var not found: 'Netrc'"
     End
 
     It '- empty var'
-      When run $FNNAME
+      invoke-it() {
+        declare -A Netrc=()
+        $FNNAME
+      }
+
+      When run invoke-it
       The status should be success
       The stdout should equal ''
       The stderr should include "Empty struct in var: 'Netrc'"
@@ -40,7 +45,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     It '- file exists, no overwrite'
       invoke-it() {
         prep
-        export -A MyNetrc=([test-host]=)
+        declare -A MyNetrc=([test-host]=)
         $FNNAME -v MyNetrc $TmpFile
       }
 
@@ -55,7 +60,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     It '- simple output to STDOUT'
       invoke-it() {
         prep
-        export -A MyNetrc=([test-host]=)
+        declare -A MyNetrc=([test-host]=)
         mapfile -t t < <($FNNAME -fv MyNetrc)
         declare -p t
       }
@@ -69,7 +74,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     It "- simple output to $TmpFile"
       invoke-it() {
         prep
-        export -A MyNetrc=([test-host]=)
+        declare -A MyNetrc=([test-host]=)
         $FNNAME -fv MyNetrc $TmpFile
       }
 
@@ -83,7 +88,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     It "- complex output to $TmpFile"
       invoke-it() {
         prep
-        export -A MyNetrc=(
+        declare -A MyNetrc=(
           [test-host]='[login]="tuser"'
           [default]='[login]="duser" [password]="dpasswd"'
         )
@@ -102,7 +107,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     It "- output to $TmpFile"
       invoke-it() {
         prep
-        export -A MyNetrc=(
+        declare -A MyNetrc=(
           [test-host]='[login]="tuser"'
           [default]='[login]="duser" [password]="dpasswd"'
         )

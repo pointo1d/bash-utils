@@ -17,7 +17,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     End
 
     Example "$FNNAME $1 $2 reports non-existance"
-      When call $FNNAME $1 $2
+      When call $FNNAME $1 ${2:+"-v $2"}
 
       if [ "$1" ]; then
         The stdout should include "${2:-Netrc}: not found"
@@ -28,15 +28,15 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
     Example "$FNNAME $1 $2 reports empty"
       invoke-it() {
-        declare -Ax ${2:-Netrc}
+        declare -A ${2:-Netrc}
 
-        $FNNAME $1 $2
+        $FNNAME $1 ${2:+"-v $2"}
       }
 
       When call invoke-it "$1" "$2"
 
       if [ "$1" ]; then
-        The stdout should include "-Ax ${2:-Netrc}"
+        The stdout should include "-A ${2:-Netrc}"
       else
         The stdout should equal 'e'
       fi
@@ -45,11 +45,11 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
     Example "$FNNAME $1 $2 reports populated"
       invoke-it() {
-        declare -Ax ${2:-Netrc}
+        declare -A ${2:-Netrc}
         local -n var=${2:-Netrc}
         var[a]=
 
-        $FNNAME $1 $2
+        $FNNAME $1 ${2:+"-v $2"}
       }
 
       When call invoke-it "$1" "$2"
@@ -64,7 +64,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
     End
 
     Example "$FNNAME $1 $2 reports fully"
-      When call $FNNAME $1 $2
+      When call $FNNAME $1 ${2:+"-v $2"}
 
       if [ "$1" ]; then
         The stdout should include "${2:-Netrc}: not found"

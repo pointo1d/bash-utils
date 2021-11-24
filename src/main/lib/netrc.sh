@@ -55,9 +55,11 @@ lib.console.die() {
 #-------------------------------------------------------------------------------
 # Function:     lib.netrc.exists
 # Description:  Function to determine if the given env var actually exists.
-# Opts:         -l  - specify long i.e. full report, by default the report is made
-#                     as per 'declare -p'.
-# Args:         $1  - optional env var name, default - ${Defaults[VarName]}
+# Opts:         -l      - specify long i.e. full report, by default the report
+#                         is made as per 'declare -p'.
+#               -v STR  - specify alternate env var name, default -
+#                         ${Defaults[VarName]}
+# Args:         None
 # Returns:      0 c/w either 'e', 'p', 'n' or full report, where ...
 #               * 'e' - var exists & is empty
 #               * 'p' - var exists & is not empty i.e. populated
@@ -68,18 +70,17 @@ lib.console.die() {
 # Notes:        None
 #-------------------------------------------------------------------------------
 lib.netrc.exists() {
-  local OPTARG OPTIND opt full=
-  while getopts 'l' opt ; do
+  local OPTARG OPTIND opt full= vname=${Defaults[VarName]}
+  while getopts 'lv:' opt ; do
     case $opt in
-      l) # Specify long i.e. full, report from 'declare -p ...'
-         full=t
-         ;;
+      l)  full=t ;;
+      v)  vname=$OPTARG ;;
     esac
   done
 
   shift $((OPTIND - 1))
 
-  local ret="$(declare -p ${1:-${Defaults[VarName]}} 2>&1)"
+  local ret="$(declare -p $vname 2>&1)"
   case ${full:-n} in
     n)  case "$ret" in
           *=*)          ret=p ;;
@@ -114,7 +115,7 @@ lib.netrc.validate-var-name() {
 
   shift $((OPTIND - 1))
 
-  case "$(lib.netrc.exists -l $vname)" in
+  case "$(lib.netrc.exists -lv $vname)" in
     declare\ -A*) : ;;
     declare\ -*)  lib.console.die 127 "Var wrong type - expected '-A'" ;;
     *)            lib.console.die 127 "Var not found: '$vname'" ;;
@@ -143,8 +144,7 @@ lib.netrc.ls-hosts() {
 
   shift $((OPTIND - 1))
 
-  lib.netrc.validate-var-name $vname
-
+  lib.netrc.validate-var-name -v $vname
   local -n var=$vname
 
   echo ${!var[@]} | sed '/default/s,\(.*\)default\(.*\),\1 \2 default,'

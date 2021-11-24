@@ -32,29 +32,29 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
     Describe 'empty file'
       It "- physical file - $SHELLSPEC_TMPBASE/extant"
-        run-it() {
+        invoke-it() {
           > $SHELLSPEC_TMPBASE/extant
-          $FNNAME $SHELLSPEC_TMPBASE/extant
+          $FNNAME -v MyNetrc $SHELLSPEC_TMPBASE/extant
         }
 
-        When call run-it
+        When call invoke-it
         The status should be success
         The stdout should equal ''
         The stderr should include \
           "Empty file: '$SHELLSPEC_TMPBASE/extant'"
       End
 
-      It "- implicit POSIX stdin - '-'"
-        run-it() { $FNNAME < /dev/null ; }
-        When call run-it
+      It "- implicit stdin - '-'"
+        invoke-it() { $FNNAME -v MyNetrc < /dev/null ; }
+        When call invoke-it
         The status should be success
         The stdout should equal ''
         The stderr should include "Empty file: '-'"
       End
 
-      It "- explicit POSIX stdin - '-'"
-        run-it() { $(echo) | $FNNAME ; }
-        When call run-it
+      It "- explicit stdin - '-'"
+        invoke-it() { $(echo) | $FNNAME -v MyNetrc ; }
+        When call invoke-it
         The status should be success
         The stdout should equal ''
         The stderr should include "Empty file: '-'"

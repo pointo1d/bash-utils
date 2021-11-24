@@ -7,6 +7,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
   Include $LNAME
 
   call-it() {
+    declare -A Netrc
     read d ; eval $d
     $FNNAME $@
   }
