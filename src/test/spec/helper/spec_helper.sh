@@ -10,6 +10,12 @@ spec_helper_precheck() {
   # Available functions: info, warn, error, abort, setenv, unsetenv
   # Available variables: VERSION, SHELL_TYPE, SHELL_VERSION
   : minimum_version "0.29.0"
+
+  case $-:"$SHELL_TYPE" in
+    *H*)  echo "histexpand is enabled for bash testing - aborting !!!" >&2
+          exit 1
+          ;;
+  esac
 }
 
 # This callback function will be invoked after a specfile has been loaded.
