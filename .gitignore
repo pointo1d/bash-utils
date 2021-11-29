@@ -2,9 +2,11 @@
 *.sw?
 
 # Log & temp files
-t
-fred
-log
-*.log
+**/?
+**/?.*
+**/fred
+**/log
+**/*.log
+**/*.sav
 
 #### END OF FILE
