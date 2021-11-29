@@ -1,5 +1,5 @@
 Describe 'lib.path'
-  Include ../main/lib/path.sh
+  Include src/main/lib/path.sh
 
   Describe 'lib.path.exists'
     call-it() { lib.path.exists $@ ; }

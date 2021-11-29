@@ -1,6 +1,6 @@
 export FNAME=lib.path.stat
 Describe $FNAME
-  Include ../main/lib/path.sh
+  Include src/main/lib/path.sh
   run-it() { $FNAME $@ ; }
   #Include path.sh
 

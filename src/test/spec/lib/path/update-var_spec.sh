@@ -1,7 +1,7 @@
 FNAME=lib.path.update-var
 
 Describe "$FNAME"
-  Include ../main/lib/path.sh
+  Include src/main/lib/path.sh
 
   call-it() { $FNAME $@ ; }
 

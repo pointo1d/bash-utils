@@ -1,5 +1,5 @@
 Describe 'lib.path'
-  Include ../main/lib/path/error.sh
+  Include src/main/lib/path/error.sh
 
   export FNAME=lib.path.error.not-found
 

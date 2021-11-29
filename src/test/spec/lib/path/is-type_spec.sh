@@ -1,4 +1,4 @@
-Include ../main/lib/path.sh
+Include src/main/lib/path.sh
 FNAME=lib.path.is-type
 
 Describe $FNAME
