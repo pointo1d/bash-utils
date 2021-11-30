@@ -1,5 +1,4 @@
+--shell /bin/bash
 --helperdir src/test/spec/helper
 --require spec_helper
---default-path "src/test/spec/lib"
---shell bash
-#### END OF FILE
+--default-path src/test/spec/lib
