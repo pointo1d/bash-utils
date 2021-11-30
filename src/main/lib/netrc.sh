@@ -225,6 +225,6 @@ lib.netrc.verify-details() {
   lib.netrc.save -v $vname
 }
 
-lib.sinclude netrc/load netrc/lookup netrc/save
+lib.sinclude netrc/load netrc/lookup netrc/save netrc/verify-details
 
 #### END OF FILE
