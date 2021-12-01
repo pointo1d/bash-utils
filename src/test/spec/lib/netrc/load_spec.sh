@@ -5,12 +5,15 @@ Prefix=$(case $(uname -o) in Msys) echo _ ;; esac)
 NetRcFile=$HOME/${Prefix}netrc
 
 TmpFile=$SHELLSPEC_TMPBASE/netrc
+
 prep() {
   cat<<EOT>$TmpFile
+# some machines
 machine somehost
   login     suser
   password  spasswd
 
+# Some defaults
 default
   login     duser
   password  dpasswd

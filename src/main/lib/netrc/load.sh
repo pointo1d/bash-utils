@@ -72,7 +72,7 @@ lib.netrc.load() {
   esac 
 
   # Now read the file in its entirety
-  local content ; mapfile content -t < $in_file
+  local content ; mapfile -t content < $in_file
 
   case ${#content[@]} in
     0)  lib.console.warn "Empty file: '$fname'" ;;
@@ -94,37 +94,41 @@ lib.netrc.load() {
   declare -gxA $vname ; local -n var=$vname
 
   local line chars=0 ; local -A entry=() ; for line in "${content[@]}" ; do
-    : ${line:-}
+    : "#$line#"
     chars=$((chars + ${#line}))
 
-    # Load & split the current line
     case "${line:-MT}" in
       MT)   # Empty line - which, if there's a record definition in
-            # progress, delineates the end of the record
+            # progress, delineates the end of it
+            case ${#entry[@]} in
+              0)  : ;;
+              *)  var+=(
+                    [$host]="$(declare -p entry | sed 's,.*(\([^)]*\) ).*,\1,')"
+                  )
+                  ;;
+            esac
             ;;
       *)    # Process the non-empty line
-            local tokens=( $line )
-
-            local cursor
-            for ((cursor=0; cursor<=${#tokens[@]}; cursor++)) ; do
+            local tokens=( $line ) cursor
+            for ((cursor=0; cursor<${#tokens[@]}; cursor++)) ; do
               local \
                 token="${tokens[$cursor]:-MT}" \
-                next="${tokens[$((cursor + 1))]}"
+                next="${tokens[$((cursor + 1))]:-}"
 
               case "$token" in
-                machine)  host=$next
-                          ((cursor=cursor + 1))
-                          ;;
+                machine)  host=$next ; ((cursor=cursor + 1)) ;;
                 default)  host=$token ;;
                 login|\
                 macdef|\
                 password) entry+=( ["$token"]="$next" )
                           ((cursor=cursor + 1))
                           ;;
-                        MT)       var+=(
-                                    [$host]="$(declare -p entry |
-                                      sed 's,.*(\([^)]*\) ).*,\1,')"
-                                  )
+                MT)       var+=(
+                            [$host]="$(declare -p entry |
+                              sed 's,.*(\([^)]*\) ).*,\1,')"
+                          )
+                          
+                          entry=()
                           ;;
               esac
             done

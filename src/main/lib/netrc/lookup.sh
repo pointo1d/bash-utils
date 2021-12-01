@@ -79,7 +79,7 @@ lib.netrc.lookup() {
     0:*)  return ;;
   esac
 
-  eval local -A entry=( ${var[$hname]:-} ) default=( ${var[default]} )
+  eval local -A entry=( ${var[$hname]:-} ) default=( ${var[default]:-} )
   local ret=()
 
   case ${entry[@]:-n}:${quiet:-n} in
@@ -98,7 +98,7 @@ lib.netrc.lookup() {
               continue
               ;;
       n:y:*)  # No value & auto-merge, so attempt the merge
-              val=${default[$field]}
+              val=${default[$field]:-}
 
               # And extend the report if not quiet
               case ${val:-n}:${quiet:-n} in

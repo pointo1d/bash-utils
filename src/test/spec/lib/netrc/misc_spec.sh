@@ -7,7 +7,6 @@ Prefix=$(case $(uname -o) in Msys) echo _ ;; esac)
 NetRcFile=$HOME/${Prefix}netrc
 
 Describe "Unit test suite for $FNNAME() (in $LNAME)"
-
   Describe "reports condition correctly"
     Parameters
       ''
@@ -16,7 +15,7 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
       -l  MyNetrc
     End
 
-    Example "$FNNAME $1 $2 reports non-existance"
+    Example "$FNNAME $1 ${2:-} reports non-existance"
       When call $FNNAME $1 ${2:+"-v $2"}
 
       if [ "$1" ]; then
@@ -26,14 +25,14 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
       fi
     End
 
-    Example "$FNNAME $1 $2 reports empty"
+    Example "$FNNAME $1 ${2:-} reports empty"
       invoke-it() {
         declare -A ${2:-Netrc}
 
         $FNNAME $1 ${2:+"-v $2"}
       }
 
-      When call invoke-it "$1" "$2"
+      When call invoke-it "$1" "${2:-}"
 
       if [ "$1" ]; then
         The stdout should include "-A ${2:-Netrc}"
@@ -43,16 +42,16 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
     End
 
-    Example "$FNNAME $1 $2 reports populated"
+    Example "$FNNAME $1 ${2:-} reports populated"
       invoke-it() {
         declare -A ${2:-Netrc}
         local -n var=${2:-Netrc}
         var[a]=
 
-        $FNNAME $1 ${2:+"-v $2"}
+        $FNNAME $1 ${2:+"-v ${2:-}"}
       }
 
-      When call invoke-it "$1" "$2"
+      When call invoke-it "$1" "${2:-}"
 
 
       if [ "$1" ]; then
@@ -63,8 +62,8 @@ Describe "Unit test suite for $FNNAME() (in $LNAME)"
 
     End
 
-    Example "$FNNAME $1 $2 reports fully"
-      When call $FNNAME $1 ${2:+"-v $2"}
+    Example "$FNNAME $1 ${2:-} reports fully"
+      When call $FNNAME $1 ${2:+"-v ${2:-}"}
 
       if [ "$1" ]; then
         The stdout should include "${2:-Netrc}: not found"
