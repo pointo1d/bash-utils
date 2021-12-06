@@ -12,7 +12,7 @@ spec_helper_precheck() {
   : minimum_version "0.29.0"
 
   case $-:"$SHELL_TYPE" in
-    *H*)  echo "histexpand is enabled for bash testing - aborting !!!" >&2
+    *H*)  echo "bash 'type' tests broken when histexpand is enabled - aborting !!!" >&2
           exit 1
           ;;
   esac
