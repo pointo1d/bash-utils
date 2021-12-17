@@ -21,6 +21,15 @@ default
 EOT
 }
 
+Describe 'Inclusion '
+  It "isn't fatal"
+    When run source $LNAME
+    The status should be success
+    The stdout should equal ''
+    The stdout should equal ''
+  End
+End
+
 Describe "Unit test suite for $FNNAME() (in $LNAME)"
   Include $LNAME
 

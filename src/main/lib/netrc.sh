@@ -25,8 +25,9 @@ export __LIB_NETRC_SH__=return
 # Include core library and its benefits
 . ${BASH_SOURCE%/*}.sh
 
-# Then make use of the non-recursive include to load the console library
-lib.sinclude console
+# Then make use of the overloaded '.' to non-recursively include the console
+# library
+. console.sh
 
 declare FilePrefix="$(case $(uname -o) in Msys) echo _ ;; esac )"
 declare StdFields="login password macdef"
@@ -150,6 +151,6 @@ lib.netrc.ls-hosts() {
   echo ${!var[@]} | sed '/default/s,\(.*\)default\(.*\),\1 \2 default,'
 }
 
-lib.sinclude netrc/load netrc/lookup netrc/save netrc/verify-details
+. netrc/load.sh netrc/lookup.sh netrc/save.sh netrc/verify-details.sh
 
 #### END OF FILE

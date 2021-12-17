@@ -1,5 +1,6 @@
 FNNAME=lib.netrc
 LNAME=src/main/${FNNAME//./\/}.sh
+%logger $LNAME
 Include $LNAME
 
 FNNAME=$FNNAME.exists

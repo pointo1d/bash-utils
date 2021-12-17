@@ -7,6 +7,9 @@
 #               routines.
 ################################################################################
 
+eval ${__LIB_CONSOLE_HELP_SH__:-}
+export __LIB_CONSOLE_HELP_SH__=return
+
 # ------------------------------------------------------------------------------
 # Function:     console.help.to-stderr()
 # Description:  Routine provided to keep things DRY by replacing the requirement

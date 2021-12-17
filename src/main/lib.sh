@@ -16,6 +16,6 @@ eval ${__LIB_SH__:-}
 export __LIB_SH__=return
 
 . ${BASH_SOURCE%.sh}/sinclude.sh
-. console path
+. console.sh path.sh
 
 #### END OF FILE
