@@ -33,10 +33,17 @@
 # * With $SINCLUDE_VERBOSE at level 2, the generated messages occur in the
 #   following stages for the given scenarios....
 #   follows...
-#   * Initial load...
+#   * Initial load (single)...
 #     1 - 'Load: <fname>: '
 #     2 - 'Load: <fname>: Starting ...'
 #     3 - 'Load: <fname>: Starting ... Done'
+#   * Initial load (multiple)...
+#     1 - 'Load: <fname1>: '
+#     2 - 'Load: <fname1>: Starting ...'
+#     3 - 'Load: <fname2>: '
+#     4 - 'Load: <fname2>: Starting ...'
+#     5 - 'Load: <fname2>: Starting ... Done'
+#     6 - 'Load: <fname1>: Done'
 #   * Duplicated load...
 #     1 - 'Load: <fname>: '
 #     2 - 'Load: <fname>: Loaded'
@@ -50,7 +57,48 @@
 eval ${_LIB_SINCLUDE_ANNOUNCE_SH_:-}
 export _LIB_SINCLUDE_ANNOUNCE_SH_=return
 
+# Include stack whose elements are each of the form <name>':::'<path>
+declare IncludeStack=()
+
+lib.sinclude.to-stdout() { builtin echo -e "$@" ; }
+
 lib.sinclude.to-stderr() { builtin echo -e "$@" >&2 ; }
+
+lib.sinclude.path.push() {
+  : ${#IncludeStack[@]}, ${IncludeStack[@]}
+  IncludeStack+=( ${1:?'No path to push'} )
+  : ${#IncludeStack[@]}
+}
+
+lib.sinclude.path.peek() {
+  case ${#IncludeStack[@]} in 0 ) ;; *) echo ${IncludeStack[-1]:-} ;; esac
+}
+
+lib.sinclude.path.peek.name() {
+  local ret=$(lib.sinclude.path.peek)
+  builtin echo ${ret##*:::}
+}
+
+lib.sinclude.path.peek.path() {
+  local ret=$(lib.sinclude.path.peek)
+  builtin echo ${ret%%:::*}
+}
+
+lib.sinclude.path.pop() {
+  local ret="$(lib.sinclude.path.peek)"
+  : ${#IncludeStack[@]}
+  case ${#IncludeStack[@]} in 0 ) ;; *) unset IncludeStack[-1] ;; esac
+  : ${#IncludeStack[@]}
+  builtin echo $ret
+}
+
+lib.sinclude.path.depth() { echo ${#IncludeStack[@]} ; }
+
+lib.sinclude.path.is-empty() {
+  local ret=n
+  case ${#IncludeStack[@]} in 0) ret=y ;; esac
+  builtin echo $ret
+}
 
 # ------------------------------------------------------------------------------
 # Function:     sinclude.load.announce.load-header()
@@ -62,17 +110,17 @@ lib.sinclude.to-stderr() { builtin echo -e "$@" >&2 ; }
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-header() {
-  local nm=${1:?'No path'} path=${2:-}
-
   : ${SINCLUDE_VERBOSE:-unset}
   case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
+
+  local nm=$(lib.sinclude.path.peek.name) path=$(lib.sinclude.path.peek.path)
 
   local msg=() ; case "$nm" in
     $path)  msg+=( $path ) ;;
     *)      msg+=( $nm "(in '$path')" ) ;;
   esac
 
-  lib.sinclude.to-stderr "Load: ${msg[@]}\c"
+  lib.sinclude.to-stdout "Load: ${msg[@]}\c"
 }
 
 # ------------------------------------------------------------------------------
@@ -85,24 +133,37 @@ lib.sinclude.announce.load-header() {
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-starting() {
-  local nm=${1:?'No path'} path=${2:-}
+  local nm=${1:?'No name'} path=${2:?'No path'}
 
+  # Save the actual path irrespective of verbosity (might be needed later for
+  # error reporting purposes)
+  lib.sinclude.path.push "$nm:::$path"
+  
   : ${SINCLUDE_VERBOSE:-unset}
-  case ${SINCLUDE_VERBOSE:-n} in
-    n|0|1)  return ;;
-  esac
+  case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
 
-  lib.sinclude.announce.load-header "$nm" "$path"
-  lib.sinclude.to-stderr " - Starting... \c"
+  case $(lib.sinclude.path.is-empty) in n) lib.sinclude.to-stdout ;; esac
+
+  lib.sinclude.to-stdout "$(lib.sinclude.announce.load-header) - Starting... \c"
 }
 
 lib.sinclude.announce.load-done() {
   : ${SINCLUDE_VERBOSE:-unset}
-  case ${SINCLUDE_VERBOSE:-n} in
-    n|0)  return ;;
-    1)    msg=".\c" ;;
-    2)    lib.sinclude.to-stderr Done ;;
+  local path="$(lib.sinclude.path.peek)" msg=
+  lib.sinclude.path.pop >/dev/null
+
+  : ${SINCLUDE_VERBOSE:-n}
+  case ${SINCLUDE_VERBOSE:-n} in n|0) return ;; esac
+
+  case ${SINCLUDE_VERBOSE:-n} in 1) msg="." ;; 2) msg=Done ;; esac
+
+  # Continue line iff appropriate i.e. a nested include
+  case $(lib.sinclude.path.is-empty) in
+    n)  msg="$msg\c" ;;
+    y)  msg="$msg\n" ;;
   esac
+
+  lib.sinclude.to-stdout "$msg"
 }
 
 # ------------------------------------------------------------------------------
@@ -114,12 +175,13 @@ lib.sinclude.announce.load-done() {
 # Variables:    None..
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.already-loaded() {
-  local nm=${1:?'No path'} path=${2:-}
+  local path="$(lib.sinclude.path.peek)" msg=
+  lib.sinclude.path.pop >/dev/null
 
   case ${SINCLUDE_VERBOSE:-n} in
-    n|0|1)  return ;;
+    n|0|1) return ;;
     2)      lib.sinclude.announce.load-header "$nm" "$path"
-            lib.sinclude.to-stderr ' - Already loaded'
+            lib.sinclude.to-stdout ' - Already loaded'
             ;;
   esac
 }

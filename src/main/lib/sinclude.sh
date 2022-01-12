@@ -59,48 +59,32 @@
 eval ${_LIB_SINCLUDE_SH_:-}
 export _LIB_SINCLUDE_SH_=return
 
-# Include stack whose elements are each of the form <name>':::'<path>
-declare IncludeStack=()
+# ------------------------------------------------------------------------------
+# Function:     lib.sinclude.abs-path()
+# Description:  Routine to take a path and return its fully pathed euivalent.
+# Takes:        $1  - path.
+# Returns:      Fully pathed equivalent of the given path on STDOUT
+# Variables:    $SINCLUDE_VERBOSE
+# ------------------------------------------------------------------------------
+lib.sinclude.abs-path() { echo $(cd $(dirname $1)>/dev/null && pwd)/${1##*/} ; }
+
+builtin . ${BASH_SOURCE//.sh}/stack.sh
+
+# Define shorthands for self
+declare \
+  sself="${BASH_SOURCE##*/}" \
+  pself="$(lib.sinclude.abs-path $BASH_SOURCE)"
+declare dself="${pself%/*}"
+
+# And use 'em to update PATH for this session
+export PATH="$dself:$PATH"
+
+# Include stack whose elements - each of which are of the form <name>':::'<path>
+lib.sinclude.stack.init IncludeStack
 
 lib.sinclude.to-stdout() { builtin echo -e "$@" ; }
 
 lib.sinclude.to-stderr() { builtin echo -e "$@" >&2 ; }
-
-lib.sinclude.path.push() {
-  : ${#IncludeStack[@]}, ${IncludeStack[@]}
-  IncludeStack+=( ${1:?'No path to push'} )
-  : ${#IncludeStack[@]}
-}
-
-lib.sinclude.path.peek() {
-  case ${#IncludeStack[@]} in 0 ) ;; *) echo ${IncludeStack[-1]:-} ;; esac
-}
-
-lib.sinclude.path.peek.name() {
-  local ret=$(lib.sinclude.path.peek)
-  builtin echo ${ret%%:::*}
-}
-
-lib.sinclude.path.peek.path() {
-  local ret=$(lib.sinclude.path.peek)
-  builtin echo ${ret##*:::}
-}
-
-lib.sinclude.path.pop() {
-  local ret="$(lib.sinclude.path.peek)"
-  : ${#IncludeStack[@]}
-  case ${#IncludeStack[@]} in 0 ) ;; *) unset IncludeStack[-1] ;; esac
-  : ${#IncludeStack[@]}
-  builtin echo $ret
-}
-
-lib.sinclude.path.depth() { echo ${#IncludeStack[@]} ; }
-
-lib.sinclude.path.is-empty() {
-  local ret=n
-  case ${#IncludeStack[@]} in 0) ret=y ;; esac
-  builtin echo $ret
-}
 
 # ------------------------------------------------------------------------------
 # Function:     sinclude.load.announce.load-header()
@@ -112,17 +96,21 @@ lib.sinclude.path.is-empty() {
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-header() {
+  local nm=${1:?'No name'} path=${2:?'No path'}
+
+  # Save the actual path irrespective of verbosity (might be needed later for
+  # error reporting purposes)
+  lib.sinclude.stack.push IncludeStack "$nm:::$path"
+
   : ${SINCLUDE_VERBOSE:-unset}
   case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
 
-  local nm=$(lib.sinclude.path.peek.name) path=$(lib.sinclude.path.peek.path)
-
-  local msg=() ; case "$nm" in
-    $path)  msg+=( $path ) ;;
-    *)      msg+=( "$nm, file: '$path'" ) ;;
+  local msg=( 'Load:' ) ; case "$nm" in
+    $path)  msg+=( "'$path'" ) ;;
+    *)      msg+=( "'$nm', file: '$path'" ) ;;
   esac
 
-  lib.sinclude.to-stdout "Load: ${msg[@]}\c"
+  lib.sinclude.to-stdout "${msg[@]}\c"
 }
 
 # ------------------------------------------------------------------------------
@@ -135,35 +123,48 @@ lib.sinclude.announce.load-header() {
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-starting() {
-  local nm=${1:?'No name'} path=${2:?'No path'}
+  local \
+    path="$(lib.sinclude.stack.peek.path IncludeStack)" \
+    nm="$(lib.sinclude.stack.peek.name IncludeStack)"
 
-  # Save the actual path irrespective of verbosity (might be needed later for
-  # error reporting purposes)
-  lib.sinclude.path.push "$nm:::$path"
-  
   : ${SINCLUDE_VERBOSE:-unset}
   case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
 
-  case $(lib.sinclude.path.is-empty) in n) lib.sinclude.to-stdout ;; esac
+  #case $(lib.sinclude.stack.is-empty IncludeStack) in
+  #  n) lib.sinclude.to-stdout ;;
+  #esac
 
-  lib.sinclude.to-stdout "$(lib.sinclude.announce.load-header) - Starting ... \c"
+  #lib.sinclude.announce.load-header
+  lib.sinclude.to-stdout " - Starting ... \c"
 }
 
+lib.sinclude.announce.load-header "$BASH_SOURCE" "$pself"
+lib.sinclude.announce.load-starting
+
+# ------------------------------------------------------------------------------
+# Function:     sinclude.load.announce-done()
+# Description:  As it says on the tin - selectively reports the file load/source
+#               start event.
+# Takes:        none
+# Returns:      Iff enabled, the message on STDOUT
+# Variables:    $SINCLUDE_VERBOSE
+# ------------------------------------------------------------------------------
 lib.sinclude.announce.load-done() {
+  local msg= \
+    path="$(lib.sinclude.stack.peek.path IncludeStack)" \
+    nm="$(lib.sinclude.stack.peek.name IncludeStack)"
+  
+  lib.sinclude.stack.pop IncludeStack >/dev/null
+
   : ${SINCLUDE_VERBOSE:-unset}
-  local path="$(lib.sinclude.path.peek)" msg=
-  lib.sinclude.path.pop >/dev/null
-
-  : ${SINCLUDE_VERBOSE:-n}
-  case ${SINCLUDE_VERBOSE:-n} in n|0) return ;; esac
-
-  case ${SINCLUDE_VERBOSE:-n} in 1) msg="." ;; 2) msg=Done ;; esac
+  case ${SINCLUDE_VERBOSE:-n} in
+    n|0)  return ;; 
+    1)    msg="." ;;
+    2)    msg=Done ;;
+  esac
 
   # Continue line iff appropriate i.e. a nested include
-  case $(lib.sinclude.path.is-empty) in
-    n)  msg="$msg\c" ;;
-    y)  msg="$msg\n" ;;
-  esac
+  case $(lib.sinclude.stack.is-empty IncludeStack) in n) msg="$msg\c" ;; esac
 
   lib.sinclude.to-stdout "$msg"
 }
@@ -177,44 +178,22 @@ lib.sinclude.announce.load-done() {
 # Variables:    None..
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.already-loaded() {
-  local path="$(lib.sinclude.path.peek)" msg=
-  lib.sinclude.path.pop >/dev/null
+  local msg= \
+    path="$(lib.sinclude.stack.peek.path IncludeStack)" \
+    nm="$(lib.sinclude.stack.peek.name IncludeStack)"
+
+  lib.sinclude.stack.pop IncludeStack >/dev/null
 
   case ${SINCLUDE_VERBOSE:-n} in
-    n|0|1) return ;;
-    2)      lib.sinclude.announce.load-header "$nm" "$path"
-            lib.sinclude.to-stdout ' - Already loaded'
-            ;;
+    2)  #lib.sinclude.announce.load-header "$nm" "$path"
+        lib.sinclude.to-stdout ' - Already loaded'
+        ;;
   esac
 }
 
-#. ${BASH_SOURCE%.sh}/announce.sh
-#
-#: "$# - '$@', SINCLUDE_PATH: ${SINCLUDE_PATH:-}"
-
-# Define the inclusion record - whose initial value is this file itself
-declare -A Included=()
+# Define the inclusion record - whose eclare -A Included=()
 
 lib.sinclude.to-stderr() { builtin echo -e "$@" >&2 ; }
-
-# ------------------------------------------------------------------------------
-# Function:     lib.sinclude.abs-path()
-# Description:  Routine to take a path and return its fully pathed euivalent.
-# Takes:        $1  - path.
-# Returns:      Fully pathed equivalent of the given path on STDOUT
-# Variables:    $SINCLUDE_VERBOSE
-# ------------------------------------------------------------------------------
-lib.sinclude.abs-path() { echo $(cd $(dirname $1)>/dev/null && pwd)/${1##*/} ; }
-
-# Define shorthands for self
-declare \
-  sself="${BASH_SOURCE##*/}" \
-  pself="$(lib.sinclude.abs-path $BASH_SOURCE)"
-declare dself="${pself%/*}"
-
-# And use 'em to update PATH for this session
-export PATH="$dself:$PATH"
-lib.sinclude.announce.load-starting "$pself" "$pself"
 
 lib.sinclude.fatal() { lib.sinclude.to-stderr "FATAL!!! $@" ; exit 1 ; }
 
@@ -254,8 +233,6 @@ lib.sinclude.fatal() { lib.sinclude.to-stderr "FATAL!!! $@" ; exit 1 ; }
 lib.sinclude() {
   case $# in 0) lib.sinclude.fatal 'Nothing to load/include' ;; esac
 
-  #: $(declare -p FUNCNAME BASH_SOURCE LINENO)
-
   # ----------------------------------------------------------------------------
   # Function:     lib.sinclude.try-it()
   # Description:  Private routine to "try" the given path
@@ -280,10 +257,14 @@ lib.sinclude() {
       : $?
     )
     
-    : $(declare -p outcome)
+    : ${outcome[-1]}
     case "${outcome[-1]}" in
-      *0) # Appears to have been successful, so do the necessary
-          builtin echo ${outcome[4]} | sed -n "s,++*\(.*$posited\)#.*,\1,p"
+      *0) # Appears to have been successful, so do the necessary and extract the
+          # full path
+          local e p ; for e in ${!outcome[@]} ; do
+            p="$(builtin echo ${outcome[$e]} | sed -n "s,++*\([^#]*$posited\)\#.*,\1,p")"
+            case "${p:-n}" in n) continue ;; *) echo $p ; break ;; esac
+          done
           ;;
       *)  # Summat up, so attempt to see if it was ENOEXIST or otherwise
           builtin echo "EERROR:${outcome[-1]}"
@@ -310,13 +291,13 @@ lib.sinclude() {
             lib.sinclude.try-it "$fnm"
             ;;
       */*)  # Complex relative path - find needed
-            local path= $try= ; for path in $(echo ${PATH//:/$'\n'}) ; do
+            local path= try= ; for path in $(echo ${PATH//:/$'\n'}) ; do
               try="$path/$fnm"
               : $path, $fnm, $try
 
               case "$(lib.sinclude.try-it $try)" in
-                :*|EERROR:*)  break ;;
-                *)            try= ;;
+                EERROR:*) try= ;;
+                *)        break ;;
               esac
             done
 
@@ -340,21 +321,27 @@ lib.sinclude() {
     
     : ${norm:-n}, $lib
     local msg= ; case "${norm:-n}" in
+      n)        lib.sinclude.fatal "File not found: $lib" ;;
       EERROR:*) lib.sinclude.fatal "Problem found in file: $lib -\n$norm" ;;
     esac
 
-    : SINCLUDE_VERBOSE - ${SINCLUDE_VERBOSE:-unset}
-    : Included[$$] - ${Included[$$]:-}
-    
-    : ${norm:-n}, $lib
+    : SINCLUDE_VERBOSE - ${SINCLUDE_VERBOSE:-unset}, Included[$$] - ${Included[$$]:-}
+    : ${norm:-n}, $lib, ${included[$$]:-n}
+    lib.sinclude.announce.load-header "$lib" "$norm"
+    #lib.sinclude.announce.init # "$lib" "$norm"
+
     case "${Included[$$]:-n}" in
-      *$norm*) lib.sinclude.announce.already-loaded $lib $norm ;;
-      *)      lib.sinclude.announce.load-starting $lib $norm
-              builtin . $norm
-              local incl="${Included[$$]:+"${Included[$$]:-}:"}$norm"
-              eval ${SINCLUDE_NO_RECORD:-"Included[$$]='$incl'"}
-              lib.sinclude.announce.load-done $lib $norm
-              ;;
+      *${norm:-n}*) case ${SINCLUDE_RELOAD:-n} in
+                      n)  lib.sinclude.announce.already-loaded ;;
+                      *)  lib.sinclude.announce.re-loaded ;;
+                    esac
+                    ;;
+      *)            lib.sinclude.announce.load-starting
+                    builtin . $norm
+                    local incl="${Included[$$]:+"${Included[$$]:-}:"}$norm"
+                    eval ${SINCLUDE_NO_RECORD:-"Included[$$]='$incl'"}
+                    lib.sinclude.announce.load-done
+                    ;;
     esac
   done
 }
