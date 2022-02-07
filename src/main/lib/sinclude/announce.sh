@@ -52,52 +52,85 @@
 #     1 - '.'
 #   * Duplicated load...
 #     1 - ''
+#
+#   header
+#   starting done | already loaded
 ################################################################################
 
-eval ${_LIB_SINCLUDE_ANNOUNCE_SH_:-}
-export _LIB_SINCLUDE_ANNOUNCE_SH_=return
+#eval ${_LIB_SINCLUDE_ANNOUNCE_SH_:-}
+#export _LIB_SINCLUDE_ANNOUNCE_SH_=return
+: $# - $@
 
-# Include stack whose elements are each of the form <name>':::'<path>
-declare IncludeStack=()
+declare -a IncludeStack
+declare Pself="$(lib.sinclude.abs-path $BASH_SOURCE)"
+declare action=${1:-} ; shift
+: $# - $@
 
-lib.sinclude.to-stdout() { builtin echo -e "$@" ; }
+case $action in
+  noload) lib.sinclude.announce.warning \
+            "'$BASH_SOURCE' ('$Pself') already loaded"
+          return
+          ;;
+esac
 
-lib.sinclude.to-stderr() { builtin echo -e "$@" >&2 ; }
+# Update the inclusion stack for load of this file - which will already be
+# present if already loaded
+lib.sinclude.add-lib "$Pself"
+IncludeStack+=( "$BASH_SOURCE::$Pself" )
+lib.sinclude.announce.action-msg "$BASH_SOURCE" "$Pself"
+case ${SINCLUDE_VERBOSE:-} in
+  2) lib.sinclude.announce.msg " - Starting ...\c" ;;
+esac
 
-lib.sinclude.path.push() {
-  : ${#IncludeStack[@]}, ${IncludeStack[@]}
-  IncludeStack+=( ${1:?'No path to push'} )
-  : ${#IncludeStack[@]}
+# ------------------------------------------------------------------------------
+# Function:     lib.sinclude.load.announce()
+# Description:  Reports the given message.
+# Takes:        $*  - the message to be reported.
+# Returns:      0 + the message on STDOUT.
+# Variables:    None.
+# ------------------------------------------------------------------------------
+lib.sinclude.announce() { builtin echo -e "$@" ; }
+
+# ------------------------------------------------------------------------------
+# Function:     lib.sinclude.fatal()
+# Description:  Reports the given message to STDOUT and exits with the optional
+#               return code.
+# Takes:        $1  - optional return code as a +ve integer.
+#               $*  - the message itself
+# Returns:      Never - generates the message on STDOUT + exit with the
+#               given/default return code.
+# Variables:    None.
+# ------------------------------------------------------------------------------
+lib.sinclude.announce.fatal() {
+  local rc=1 ; case i${1//[0-9]/} in i) rc=$1 ; shift ;; esac
+
+  builtin echo -e "$*" >&2
+  exit $rc
 }
 
-lib.sinclude.path.peek() {
-  case ${#IncludeStack[@]} in 0 ) ;; *) echo ${IncludeStack[-1]:-} ;; esac
+# ------------------------------------------------------------------------------
+# Function:     sinclude.load.announce.add-lib()
+# Description:  As it says on the tin - selectively reports the file load/source
+#               start event.
+# Takes:        $1  - lib name ( as supplied in the call).
+#               $2  - fully pathed lib name
+# Returns:      Iff enabled, the message on STDOUT
+# Variables:    $SINCLUDE_VERBOSE
+# ------------------------------------------------------------------------------
+lib.sinclude.announce.add-lib() {
+  local nm=${1:?'No name'} path="${2:-$1}"
+  path="$(lib.sinclude.abs-path $path)"
+
+  # Save the actual path irrespective of verbosity (might be needed later for
+  # error reporting purposes)
+  IncludeStack+=( "$nm:::$path" )
 }
 
-lib.sinclude.path.peek.name() {
-  local ret=$(lib.sinclude.path.peek)
-  builtin echo ${ret##*:::}
-}
-
-lib.sinclude.path.peek.path() {
-  local ret=$(lib.sinclude.path.peek)
-  builtin echo ${ret%%:::*}
-}
-
-lib.sinclude.path.pop() {
-  local ret="$(lib.sinclude.path.peek)"
-  : ${#IncludeStack[@]}
-  case ${#IncludeStack[@]} in 0 ) ;; *) unset IncludeStack[-1] ;; esac
-  : ${#IncludeStack[@]}
-  builtin echo $ret
-}
-
-lib.sinclude.path.depth() { echo ${#IncludeStack[@]} ; }
-
-lib.sinclude.path.is-empty() {
-  local ret=n
-  case ${#IncludeStack[@]} in 0) ret=y ;; esac
-  builtin echo $ret
+lib.sinclude.announce.get-top() {
+  case ${IncludeStack[@]:-0} in
+    0)  ;;
+    *)  builtin echo ${IncludeStack[-1]} ;;
+  esac
 }
 
 # ------------------------------------------------------------------------------
@@ -110,80 +143,70 @@ lib.sinclude.path.is-empty() {
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-header() {
-  : ${SINCLUDE_VERBOSE:-unset}
+  local nm=${1:?'No name'} path="${2:-$1}"
+
+  # Save the actual path irrespective of verbosity (might be needed later for
+  # error reporting purposes)
+  lib.sinclude.announce.add-lib "$nm" "$path"
+
   case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
 
-  local nm=$(lib.sinclude.path.peek.name) path=$(lib.sinclude.path.peek.path)
-
-  local msg=() ; case "$nm" in
-    $path)  msg+=( $path ) ;;
-    *)      msg+=( $nm "(in '$path')" ) ;;
+  local msg=( 'Load:' ) ; case "$nm" in
+    $path)  msg+=( "'$path'" ) ;;
+    *)      msg+=( "'$nm', file: '$path'" ) ;;
   esac
 
-  lib.sinclude.to-stdout "Load: ${msg[@]}\c"
+  lib.sinclude.announce "${msg[@]}\c"
 }
 
 # ------------------------------------------------------------------------------
 # Function:     sinclude.load.announce-starting()
 # Description:  As it says on the tin - selectively reports the file load/source
-#               start event.
-# Takes:        $1  - lib name ( as supplied in the call).
-#               $2  - fully pathed lib name
+#               start event. If called before .*load-header(), then it
+#               (lib.sinclude.load-header()) is automatically called
+# Takes:        $1  - accessible lib name
 # Returns:      Iff enabled, the message on STDOUT
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
 lib.sinclude.announce.load-starting() {
-  local nm=${1:?'No name'} path=${2:?'No path'}
+  local top="$(lib.sinclude.announce.get-top)"
+  local nm="${top/::*}" path="${top/*::}"
 
-  # Save the actual path irrespective of verbosity (might be needed later for
-  # error reporting purposes)
-  lib.sinclude.path.push "$nm:::$path"
-  
-  : ${SINCLUDE_VERBOSE:-unset}
   case ${SINCLUDE_VERBOSE:-n} in n|0|1) return ;; esac
 
-  case $(lib.sinclude.path.is-empty) in n) lib.sinclude.to-stdout ;; esac
-
-  lib.sinclude.to-stdout "$(lib.sinclude.announce.load-header) - Starting... \c"
+  lib.sinclude.announce " - Starting ... \c"
 }
 
-lib.sinclude.announce.load-done() {
-  : ${SINCLUDE_VERBOSE:-unset}
-  local path="$(lib.sinclude.path.peek)" msg=
-  lib.sinclude.path.pop >/dev/null
-
-  : ${SINCLUDE_VERBOSE:-n}
-  case ${SINCLUDE_VERBOSE:-n} in n|0) return ;; esac
-
-  case ${SINCLUDE_VERBOSE:-n} in 1) msg="." ;; 2) msg=Done ;; esac
-
-  # Continue line iff appropriate i.e. a nested include
-  case $(lib.sinclude.path.is-empty) in
-    n)  msg="$msg\c" ;;
-    y)  msg="$msg\n" ;;
-  esac
-
-  lib.sinclude.to-stdout "$msg"
-}
+# Better late than never, announce this file is starting to load
+#lib.sinclude.announce.load-starting "$BASH_SOURCE"
 
 # ------------------------------------------------------------------------------
-# Function:     sinclude.announce.already-loaded()
+# Function:     sinclude.load.announce-done()
 # Description:  As it says on the tin - selectively reports the file load/source
-#               loaded event.
-# Takes:        None
-# Returns:      
-# Variables:    None..
+#               start event.
+# Takes:        none
+# Returns:      Iff enabled, the message on STDOUT
+# Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.already-loaded() {
-  local path="$(lib.sinclude.path.peek)" msg=
-  lib.sinclude.path.pop >/dev/null
+lib.sinclude.announce.load-done() {
+  : ${IncludeStack[@]}
+  local msg= nm="$(lib.sinclude.announce.get-top)"
+  local abs="${nm//*::}" ; nm=${nm//::*}
+
+  case ${#IncludeStack[@]} in 0) ;; *) unset IncludeStack[-1] ;; esac
 
   case ${SINCLUDE_VERBOSE:-n} in
-    n|0|1) return ;;
-    2)      lib.sinclude.announce.load-header "$nm" "$path"
-            lib.sinclude.to-stdout ' - Already loaded'
-            ;;
+    1)  lib.sinclude.announce ".\c" ;;
+    2)  case ${#IncludeStack[@]} in
+          0)  lib.sinclude.announce.action-msg "$nm" "$abs"
+              lib.sinclude.announce ' - Done' 
+              ;;
+          *)  lib.sinclude.announce ' Done' ;;
+        esac
+        ;;
   esac
 }
+
+lib.sinclude.announce.load-done
 
 #### END OF FILE
