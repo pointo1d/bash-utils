@@ -117,7 +117,7 @@ Load: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Done"
     Describe "complex, direct ('console/help')"
       Parameters
         . console/help.sh
-#        source console/help.sh
+        source console/help.sh
       End
 
       Example "$1 $2"
