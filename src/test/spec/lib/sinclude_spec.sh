@@ -1,106 +1,163 @@
 FNNAME=lib.sinclude LNAME=${FNNAME//./\/}.sh PDIR=src/main
 LDIR=$(cd $PDIR >/dev/null && pwd)
 
-Describe "The OUT ('$LNAME') can itself be included"
-  include-it() {
-    : $FNNAME, $LNAME, $PDIR, $LDIR
-    local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
+include-it() {
+  : $FNNAME, $LNAME, $PDIR, $LDIR
+  local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
 
-    builtin . $lib
-    if test "${flag:-}" ; then builtin . $lib ; fi
-  }
+  builtin . $lib
+  if test "${flag:-}" ; then builtin . $lib ; fi
+}
 
-  Context 'single attempt'
-    Context 'varying verbosity levels'
-      SINCLUDE_VERBOSE=
-
-      It "on the QT i.e. SINCLUDE_VERBOSE=${SINCLUDE_VERBOSE:-unset}"
-        When run include-it
-        The status should be success
-        The stdout should equal ''
-        The stderr should equal ''
-      End
-
-      SINCLUDE_VERBOSE=1
-
-      It "SINCLUDE_VERBOSE=$SINCLUDE_VERBOSE"
-        When run include-it
-        The status should be success
-        The stdout should equal '....'
-        The stderr should equal ''
-      End
-
-      SINCLUDE_VERBOSE=2
-
-      It "SINCLUDE_VERBOSE=$SINCLUDE_VERBOSE"
-        When run include-it
-        The status should be success
-        The stdout should equal "\
-Load: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ...
-Load: '$PDIR/${LNAME/.sh}/announce.sh' ('$LDIR/${LNAME/.sh}/announce.sh') - Starting ... Done
-Load: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Done"
-        The stderr should equal ''
-      End
-    End
-  End
- 
-  Context 'multiple attempts'
-    It 'first time'
+Describe "The OUT ('$LNAME') itself"
+  Context  'can be sourced - default behaviours - should '
+    It 'be silent & without error'
       When run include-it
       The status should be success
       The stdout should equal ''
       The stderr should equal ''
     End
 
-    Describe 'repeated inclusion'
-      Context 'disallowed i.e. SINCLUDE_RELOAD unset'
-        It '- verbosely i.e. SINCLUDE_NOWARN unset'
-          SINCLUDE_NOWARN= SINCLUDE_RELOAD=
-          When run include-it t
-          The status should be success
-          The stdout should equal ''
-          The stderr should equal \
-            "WARNING !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') already loaded"
-        End
-        
-        It '- silently i.e. SINCLUDE_NOWARN set'
-          SINCLUDE_NOWARN=fred SINCLUDE_RELOAD=
-          When run include-it t
-          The status should be success
-          The stdout should equal ''
-          The stderr should equal ''
-        End
+    It 'update the caller space'
+      When call include-it
+      The status should be success
+      The stdout should equal ''
+      The stderr should equal ''
+      The value "$(type -t lib.sinclude)" should equal 'function'
+    End
+
+    It 'fail to reload itself'
+      When call include-it t
+      The status should be success
+      The stdout should equal ''
+      The stderr should equal ''
+      #\
+      #  "WARNING !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') already loaded"
+      The value "$(type -t lib.sinclude)" should equal 'function'
+    End
+
+    It 'reload itself when enabled (using non-empty SINCLUDE_RELOAD)'
+      SINCLUDE_RELOAD=t
+      When call include-it t
+      The status should be success
+      The stdout should equal ''
+      The stderr should equal ''
+      The value "$(type -t lib.sinclude)" should equal 'function'
+    End
+  End
+
+  Describe \
+    'can be sourced - default behaviours persist with non-default verbosity - it should'
+    Context 'SINCLUDE_VERBOSE set to non-usable/off value)'
+      Parameters
+        0
+        ''
+        off
+        wibble
       End
 
-      Context 'allowed i.e. SINCLUDE_RELOAD set'
-        It '- verbosely i.e. SINCLUDE_NOWARN unset'
-          SINCLUDE_NOWARN= SINCLUDE_RELOAD=fred
-          When run include-it t
-          The status should be success
-          The stdout should equal ''
-          The stderr should equal ''
-        End
-        
-        It '- silently i.e. SINCLUDE_NOWARN set'
-          SINCLUDE_NOWARN=fred SINCLUDE_RELOAD=
-          When run include-it t
-          The status should be success
-          The stdout should equal ''
-          The stderr should equal ''
-        End
+      Example "silent & without error SINCLUDE_VERBOSE=${1:-unset}"
+        SINCLUDE_VERBOSE=$1
+        When call include-it
+        The status should be success
+        The stdout should equal ''
+        The stderr should equal ''
+      End
+
+      Example "update the caller space - SINCLUDE_VERBOSE=${1:-unset}"
+        When call include-it
+        The status should be success
+        The stdout should equal ''
+        The stderr should equal ''
+        The value "$(type -t lib.sinclude)" should equal 'function'
+      End
+
+      Example "fail to reload itself - SINCLUDE_VERBOSE=${1:-unset}"
+        When call include-it t
+        The status should be success
+        The stdout should equal ''
+        The stderr should equal '' 
+      End
+    End
+
+    Context 'be verbose (SINCLUDE_VERBOSE set - to usable value) - it should'
+      Parameters
+        1
+        2
+      End
+
+      report_string() {
+        local verb=${1:?'No verbosity level'} type=$2 exp=
+
+        case $type:$verb in
+          load:1|\
+          noload:1) exp='
+..'
+                    ;;
+          reload:1) exp='
+..
+..'                 ;;
+          load:2) exp="
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done"
+                ;;
+          noload:2) exp="
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Already loaded"
+                ;;
+          reload:2) exp="
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Reloading ... Done"
+                ;;
+        esac
+
+        builtin echo "$exp"
+      }
+
+      Example "have no error - SINCLUDE_VERBOSE=$1"
+        SINCLUDE_VERBOSE=$1
+        When call include-it
+        The status should be success
+        The stdout should equal "$(report_string $1 load)"
+        The stderr should equal ''
+      End
+
+      Example "update the caller space - SINCLUDE_VERBOSE=$1"
+        SINCLUDE_VERBOSE=$1
+        When call include-it
+        The status should be success
+        The stdout should equal "$(report_string $1 load)"
+        The stderr should equal ''
+        The value "$(type -t .)" should equal 'function'
+        The value "$(type -t source)" should equal 'function'
+      End
+
+      Example "fail to reload itself - SINCLUDE_VERBOSE=$1"
+        SINCLUDE_VERBOSE=$1
+        When call include-it t
+        The status should be success
+        The stdout should equal "$(report_string $1 noload)"
+        The stderr should equal ''
+      End
+
+      Example "reload when enabled (SINCLUDE_RELOAD set non-empty) - SINCLUDE_VERBOSE=$1"
+        SINCLUDE_VERBOSE=$1 SINCLUDE_RELOAD=t
+        When call include-it t
+        The status should be success
+        The stdout should equal "$(report_string $1 reload)"
+        The stderr should equal ''
+        The value "$(type -t lib.sinclude)" should equal 'function'
       End
     End
   End
 
-  Describe 'bash-utils lib dir auto-accessible'
-    %logger "file:: $PDIR/$LNAME"
+  Describe 'make other bash-utils libraries auto-accessible'
     #Include $PDIR/$LNAME
     include-it() {
       . $PDIR/$LNAME
       eval $@
     }
 
-    Context 'simple - console'
+    Context 'simple e.g. console'
       Parameters
         . console.sh
         source console.sh
@@ -114,7 +171,7 @@ Load: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Done"
       End
     End
 
-    Describe "complex, direct ('console/help')"
+    Describe "complex e.g. 'console/help'"
       Parameters
         . console/help.sh
         source console/help.sh
@@ -128,236 +185,99 @@ Load: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Done"
       End
     End
   End
+End
 
+Describe 'Inclusion of the OUT by an external file'
   Describe 'callers dir auto-accessible'
+    TDIR=$SHELLSPEC_TMPBASE/my-test
     run-it() {
-      local dir=$SHELLSPEC_TMPBASE/my-test
-      local sub=$dir/sub
-
-      local upper=$dir/upper.sh lower=$sub/lower.sh
+      local sub=$TDIR/sub
+      local upper=$TDIR/upper.sh lower=$sub/lower.sh
 
       mkdir -p $sub
 
       echo return > $lower
-      echo ". sub/lower.sh" > $upper
+      cat<<!>$upper
+. sub/lower.sh
+!
 
       . $PDIR/$LNAME
       . $upper
     }
-      
-    It "upper.sh -> sub/lower.sh"
-      When call run-it
-      The output should equal ''
-      The stderr should equal ''
-      The status should equal 0
+
+    Context 'varying verbosity levels'
+           SINCLUDE_VERBOSE=
+
+      It "on the QT i.e. SINCLUDE_VERBOSE=${SINCLUDE_VERBOSE:-unset}"
+        When run run-it
+        The status should be success
+        The stdout should equal ''
+        The stderr should equal ''
+      End
+
+      SINCLUDE_VERBOSE=1
+
+      It "SINCLUDE_VERBOSE=$SINCLUDE_VERBOSE"
+        When run run-it
+        The status should be success
+        The stdout should equal '
+..
+....'
+        The stderr should equal ''
+      End
+
+      SINCLUDE_VERBOSE=2
+
+      It "SINCLUDE_VERBOSE=$SINCLUDE_VERBOSE"
+        When run run-it
+        The status should be success
+        The stdout should equal "
+Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done
+Source: '$TDIR/upper.sh' - Starting ...
+Source: 'sub/lower.sh' ('$TDIR/sub/lower.sh') - Starting ... Done
+Source: '$TDIR/upper.sh' - Done"
+        The stderr should equal ''
+      End
     End
   End
 End
 
-#Describe "$FNNAME() - good path i.e. no fatalities ($LNAME)"
-#  invoke-it() {
-#    : $# - $@
-#    local t=$SHELLSPEC_TMPBASE/${2//$SHELLSPEC_TMPBASE}
-#    echo "export MYSELF=$2" > $t
-#    SINCLUDE_PATH=$SHELLSPEC_TMPBASE
-#
-#    eval $@
-#  }
-#
-#  invoke-it-twice() {
-#    : $# - $@
-#    local cmd="$1" fnm="$2"
-#    local t=$SHELLSPEC_TMPBASE/${fnm//$SHELLSPEC_TMPBASE}
-#    echo "export MYSELF=$fnm" > $t
-#    SINCLUDE_PATH=$SHELLSPEC_TMPBASE
-#
-#    eval $cmd $fnm
-#    eval $cmd $fnm
-#  }
-#
-#  Describe 'Successful inclusion of the OUT - at each reporting level'
-#    Parameters
-#      ''
-#      0
-#      1
-#      2
-#    End
-#
-#    Example "SINCLUDE_VERBOSE='$1'"
-#      run-it() {
-#        local v="${1:-}" ; shift
-#        export SINCLUDE_VERBOSE="${v:-}"
-#        builtin . src/main/$LNAME
-#      }
-#
-#      When call run-it $1
-#      The status should be success
-#      The stderr should equal ''
-#      if [ ! "${1:-}" ]; then
-#        exp=
-#      elif [ ${1:-} = 0 ]; then
-#        exp=""
-#      elif [ ${1:-} = 1 ]; then
-#        exp='...'
-#      elif [ ${1:-} = 2 ]; then
-#        exp="Load: 'src/main/$LNAME', file: '$LDIR/$LNAME' - Starting ...
-#Load: 'src/main/$LNAME/announce.sh', file: '$LDIR/$LNAME/announce.sh' - Starting ...
-#Load: 'src/main/$LNAME/announce/stack.sh', file: '$LDIR/$LNAME/announce/stack.sh' - Starting ... Done
-#Load: 'src/main/$LNAME/announce.sh', file: '$LDIR/$LNAME/announce.sh' - Done
-#Load: 'src/main/$LNAME', file: '$LDIR/$LNAME' - Done"
-#      fi
-#      The stdout should equal "$exp"
-#    End
-#  End
-#
-#  Include src/main/$LNAME
-#  
-#  Describe 'existing file is included - silently'
-#    Parameters
-#      . exist
-#      source exist
-#      . exist.sh
-#      source exist.sh
-#      . $SHELLSPEC_TMPBASE/exist.sh
-#      source $SHELLSPEC_TMPBASE/exist.sh
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE unset"
-#      unset SINCLUDE_VERBOSE
-#      When call invoke-it $1 $2
-#
-#      The status should be success
-#      The stdout should equal ''
-#      The variable MYSELF should equal $2
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE=0"
-#      SINCLUDE_VERBOSE=0
-#      When call invoke-it $1 $2
-#
-#      The status should be success
-#      The stdout should equal ''
-#      The variable MYSELF should equal $2
-#    End
-#  End
-#
-#  Describe 'existing file is included - verbosely'
-#    Parameters
-#      . exist
-#      source exist
-#      . exist.sh
-#      source exist.sh
-#      . $SHELLSPEC_TMPBASE/exist.sh
-#      source $SHELLSPEC_TMPBASE/exist.sh
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE=1"
-#      SINCLUDE_VERBOSE=1
-#      When call invoke-it $1 $2
-#      The status should equal 0
-#      The stderr should equal ''
-#      The variable MYSELF should equal $2
-#      The stdout should equal '.'
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE=2"
-#      SINCLUDE_VERBOSE=2
-#
-#      When call invoke-it $1 $2
-#      The status should equal 0
-#      The stderr should equal ''
-#      The variable MYSELF should equal $2
-#      
-#      if [[ $2 == /* ]]; then
-#        The stdout should equal "Load: '$2' - Starting ... Done"
-#      else
-#        The stdout should equal "Load: '$2', file: '$SHELLSPEC_TMPBASE/$2' - Starting ... Done"
-#      fi
-#    End
-#  End
-#
-#  Describe "Nested includes"
-#    Inner="$SHELLSPEC_TMPBASE/inner"
-#    Outer="$SHELLSPEC_TMPBASE/outer"
-#
-#    nested-invoke() {
-#      echo ". $Inner" > $Outer
-#      echo return > $Inner
-#
-#      SINCLUDE_VERBOSE=${1:-} . $Outer
-#    }
-#    
-#    Parameters
-#      ''
-##      0
-##      1
-##      2
-#    End
-#
-#    Example "SINCLUDE_VERBOSE=${1:-unset}"
-#      When call nested-invoke $1
-#      The status should equal 0
-#      The stderr should equal ''
-#
-#      if [ ! "${1:-}" -o "${1:-}" = 0 ]; then
-#        exp=''
-#      elif [ "${1:-}" = 1 ]; then
-#        exp='..'
-#      elif [ "${1:-}" = 2 ]; then
-#        exp="
-#Load: $Outer - Starting ...
-#Load: $Inner - Starting ... Done
-#Load: $Outer - Done"
-#      fi
-#      The stdout should equal "$exp"
-#    End
-#  End
-#
-#  Describe 'existing file is included only once'
-#    Parameters
-#      . exist
-#      source exist
-#      . exist.sh
-#      source exist.sh
-#      . $SHELLSPEC_TMPBASE/exist.sh
-#      source $SHELLSPEC_TMPBASE/exist.sh
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE="
-#      SINCLUDE_VERBOSE=
-#
-#      When call invoke-it-twice $1 $2
-#      The status should be success
-#      The stdout should equal ''
-#      The variable MYSELF should equal $2
-#    End
-#
-#    Example "'$1 $2' - SINCLUDE_VERBOSE=1"
-#      SINCLUDE_VERBOSE=1
-#
-#      When call invoke-it-twice $1 $2
-#      The status should be success
-#      The stdout should equal '..'
-#      The variable MYSELF should equal $2
-#    End
-#
-#    Example "$1 '$2' - SINCLUDE_VERBOSE=2"
-#      SINCLUDE_VERBOSE=2
-#
-#      When call invoke-it-twice $1 $2
-#      The status should equal 0
-#      The stderr should equal ''
-#      The variable MYSELF should equal $2
-#
-#      if [[ $2 == /* ]]; then
-#        exp="Load: '$2' - Starting ... Done
-#Load: '$2' - Already loaded"
-#      else
-#        exp="Load: '$2', file: '$SHELLSPEC_TMPBASE/$2' - Starting ... Done
-#Load: '$2', file: '$SHELLSPEC_TMPBASE/$2' - Already loaded"
-#      fi
-#      The stdout should equal "$exp"
-#    End
-#  End
-#
-#End
+Describe 'Recursive inclusion handling'
+  Fname=$SHELLSPEC_TMPBASE/my-test.sh
+
+  It 'detects direct recursion'
+    run-it() {
+      cat<<!>$Fname
+. $Fname
+!
+
+      . $PDIR/$LNAME
+      . $Fname
+    }
+
+    When run run-it
+    The status should not be success
+    The stdout should equal ''
+    The stderr should equal \
+      "FATAL !!! Direct recursive inclusion detected in '$Fname'"
+  End
+
+  It 'detects indirect recursion'
+    run-it() {
+      sub=$SHELLSPEC_TMPBASE/sub.sh
+      builtin echo ". $sub" >$Fname
+      builtin echo ". $Fname" >$sub
+
+      . $PDIR/$LNAME
+      . $Fname
+    }
+
+    When run run-it
+    The status should not be success
+    The stdout should equal ''
+    The stderr should equal \
+      "FATAL !!! Indirect recursive inclusion detected in '$Fname'"
+  End
+End
+
+#### END OF FILE
