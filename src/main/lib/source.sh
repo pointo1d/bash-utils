@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # vim: et ai sw=2 sts=2
 ################################################################################
-# File:         sinclude.sh
+# File:         source.sh
 # Description:  Pure bash(1) script to provide a recursive inclusion avoiding
 #               file inclusion capability whilst providing a simpler interface
 #               such that the caller need only know a directory under which the
 #               sourced file exists, so for example, this file may be included
-#               merely as `. sinclude` or even the help sub-library of console
+#               merely as `. source` or even the help sub-library of console
 #               may be included as `. console/help` - in these casaes this is
 #               because the directory containing these elements is automgically
 #               included in the PATH for free.
+# Doc link:     ../../../docs/source.md
 # Env vars:     $SINCLUDE_PATH    - used to supplement the callers $PATH for
 #                                   "places" in which to seek included files
 #                                   (when used with relative included file
@@ -98,17 +99,17 @@ esac
 : "${#IncludeStack[@]} - ${IncludeStack[@]}"
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.warning()
+# Function:     bash-utils.source.warning()
 # Description:  Simple routine to report the given message, as a warning,
 #               irrespective of the ruling verbosity.
 # Takes:        $*  - the message to report
 # Returns:      0 always
 # Variables:    None.
 # ------------------------------------------------------------------------------
-lib.sinclude.warning() { builtin echo -e "WARNING !!! $@" >&2 ; }
+bash-utils.source.warning() { builtin echo -e "WARNING !!! $@" >&2 ; }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.fatal()
+# Function:     bash-utils.source.fatal()
 # Description:  Simple routine to report the given message as a fatal error -
 #               irrespective of the ruling verbosity.
 # Takes:        $1  - either required rc or the first token in the message to
@@ -118,7 +119,7 @@ lib.sinclude.warning() { builtin echo -e "WARNING !!! $@" >&2 ; }
 #               rc
 # Variables:    None.
 # ------------------------------------------------------------------------------
-lib.sinclude.fatal() {
+bash-utils.source.fatal() {
   # Extract the posited return code - if any
   local rc=1 ; case i"${1//[0-9]}" in i) rc=$1 ; shift ;; esac
 
@@ -127,7 +128,7 @@ lib.sinclude.fatal() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.is-abs-path()
+# Function:     bash-utils.source.is-abs-path()
 # Description:  Routine to take a path and determined if it's an absolute path.
 # Takes:        $1  - path.
 #               $2  - if given, specifies that a non-absolute path is fatal.
@@ -135,22 +136,22 @@ lib.sinclude.fatal() {
 #               otherwise.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-lib.sinclude.is-abs-path() {
+bash-utils.source.is-abs-path() {
   local ret=n ; case "${1:?'No path to test'}" in /*) ret=y ;; esac
   case $ret:${2:-n} in
     n:n)  ;;
-    n:*)  lib.sinclude.fatal "Path isn't absolute: '$1'" ;;
+    n:*)  bash-utils.source.fatal "Path isn't absolute: '$1'" ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.abs-path()
+# Function:     bash-utils.source.abs-path()
 # Description:  Routine to take a path and return its fully pathed equivalent.
 # Takes:        $1  - path.
 # Returns:      Fully pathed equivalent of the given path on STDOUT
 # Variables:    None.
 # ------------------------------------------------------------------------------
-lib.sinclude.abs-path() {
+bash-utils.source.abs-path() {
   case "${1:?'No path to convert'}" in
     /*)   builtin echo $1 ;;
     */*)  ( cd ${1%/*}>/dev/null && builtin echo $PWD/${1##*/} ) ;;
@@ -159,18 +160,18 @@ lib.sinclude.abs-path() {
 }
 
 # File global containing the absolute path to self
-declare Pself="$(lib.sinclude.abs-path $BASH_SOURCE)"
+declare Pself="$(bash-utils.source.abs-path $BASH_SOURCE)"
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.is-loaded()
+# Function:     bash-utils.source.is-loaded()
 # Description:  Routine to determine if the given path has already been loaded.
 # Takes:        $1  - absolute path, fatal if not.
 # Returns:      Updated STDOUT - 'y' iff the given path has already been
 #               loaded, 'n' otherwise.
 # Variables:    $Included.
 # ------------------------------------------------------------------------------
-lib.sinclude.is-loaded() {
-  lib.sinclude.is-abs-path ${1:?'No lib path to test'} t
+bash-utils.source.is-loaded() {
+  bash-utils.source.is-abs-path ${1:?'No lib path to test'} t
 
 : ${!Included[@]}, ${Included["$1"]:+y}
   local ret=n ; case ${Included["$1"]:+y} in y) ret=y ;; esac
@@ -178,7 +179,7 @@ lib.sinclude.is-loaded() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.announce.msg()
+# Function:     bash-utils.source.announce.msg()
 # Description:  Simple routine to report the given message to STDOUT - dependant
 #               on the ruling verbosity.
 # Takes:        $*  - the message to report
@@ -186,12 +187,12 @@ lib.sinclude.is-loaded() {
 # Variables:    $SINCLUDE_VERBOSE - defines the ruling verbosity level for
 #                                   message reporting
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.msg() {
+bash-utils.source.announce.msg() {
   case ${SINCLUDE_VERBOSE:-n} in 1|2) builtin echo -e "$@" ;; esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     sinclude.load.announce.msg-body()
+# Function:     source.load.announce.msg-body()
 # Description:  As it says on the tin - selectively generates the appropriate
 #               file loading/source 'ing message.
 # Takes:        $1  - lib name ( as supplied in the call).
@@ -201,10 +202,10 @@ lib.sinclude.announce.msg() {
 # Returns:      The generated string on STDOUT
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.msg-body() {
+bash-utils.source.announce.msg-body() {
   #local nm=${1:?'No name'}
-  #lib.sinclude.is-abs-path "$2" t ; local abs="$2"
-  local -A attrs ; eval $(lib.sinclude.announce.get-attrs)
+  #bash-utils.source.is-abs-path "$2" t ; local abs="$2"
+  local -A attrs ; eval $(bash-utils.source.announce.get-attrs)
 
   : ${attrs[type]}:${SINCLUDE_VERBOSE:-n}
   local hdr=() ; case ${attrs[type]}:${SINCLUDE_VERBOSE:-n} in
@@ -218,11 +219,11 @@ lib.sinclude.announce.msg-body() {
                 ;;
   esac
   
-  lib.sinclude.announce.msg "${hdr[@]}\c"
+  bash-utils.source.announce.msg "${hdr[@]}\c"
 }
 
 # ------------------------------------------------------------------------------
-# Function:     sinclude.load.announce.add-lib()
+# Function:     source.load.announce.add-lib()
 # Description:  Called first for any sourced file, this routine records the
 #               name, absolute path and "type" for the given library name &/or
 #               path on the included stack.
@@ -231,21 +232,21 @@ lib.sinclude.announce.msg-body() {
 # Returns:      $IncludeStack updated for the given nm & path
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.add-lib() {
+bash-utils.source.announce.add-lib() {
   local nm=${1:?'No name'}
-  lib.sinclude.is-abs-path "$2" t
+  bash-utils.source.is-abs-path "$2" t
 
   # Perform recursive inclusion detection before doing anything else
   local entry ; for entry in "${!IncludeStack[@]}" ; do
     local -A attrs ; eval ${IncludeStack[$entry]}
     case ${attrs[abs]} in
       "$2") local imm=Direct ; case $entry in 0) ;; *) imm=Indirect ;; esac
-            lib.sinclude.fatal "$imm recursive inclusion detected in '$2'"
+            bash-utils.source.fatal "$imm recursive inclusion detected in '$2'"
             ;;
     esac
   done
 
-  local type=$(lib.sinclude.is-loaded "$2"):${SINCLUDE_RELOAD:-n}
+  local type=$(bash-utils.source.is-loaded "$2"):${SINCLUDE_RELOAD:-n}
   case $type in
     n:*)  # not (yet) loaded, reload immaterial
           type=load
@@ -267,7 +268,7 @@ lib.sinclude.announce.add-lib() {
     *)  eval ${IncludeStack[0]}
         attrs[has_nested]=t
         IncludeStack[0]="$(declare -p attrs)"
-        case ${SINCLUDE_VERBOSE:-} in 2) lib.sinclude.announce.msg ;; esac
+        case ${SINCLUDE_VERBOSE:-} in 2) bash-utils.source.announce.msg ;; esac
         ;;
     esac
 
@@ -276,7 +277,7 @@ lib.sinclude.announce.add-lib() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.announce.new-line()
+# Function:     bash-utils.source.announce.new-line()
 # Description:  Routine to be called prior to generating a report whose purpose
 #               is to determine if a newline is required and if so, generate one
 #               on STDOUT. The determination of whether, or not, one is needed
@@ -290,37 +291,37 @@ lib.sinclude.announce.add-lib() {
 # Takes:        None.
 # Returns:      <CR><NL> on STDOUT iff necessary
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.new-line() {
+bash-utils.source.announce.new-line() {
   : ${IncludeStack[@]}
-  local -A attrs ; eval $(lib.sinclude.announce.get-attrs)
+  local -A attrs ; eval $(bash-utils.source.announce.get-attrs)
   local cond=${FirstPass:-}:${SINCLUDE_VERBOSE:-}:${attrs[has_nested]:-}:${#IncludeStack[@]}
 
   case $cond in
     t:*|\
     :1::1|\
-    :2:t:*)   lib.sinclude.announce.msg ;;
+    :2:t:*)   bash-utils.source.announce.msg ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.announce.get-attrs()
+# Function:     bash-utils.source.announce.get-attrs()
 # Description:  Routine to get the set of attribs for the given/default lib.
 # Takes:        $1  - optional set of attribs to return - by default, this is
 #               the current/top set
 # Returns:      The requested attrib set.
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.get-attrs() {
+bash-utils.source.announce.get-attrs() {
   local ret="${IncludeStack[${pos:-0}]}"
   #case "$ret" in
-  #  0)  lib.sinclude.fatal "Cannot return the last element" ;;
+  #  0)  bash-utils.source.fatal "Cannot return the last element" ;;
   #esac
 
   builtin echo "$ret"
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.announce.load-action()
+# Function:     bash-utils.source.announce.load-action()
 # Description:  As it says on the tin - selectively reports the file load/source
 #               start event.
 # Takes:        $1  - lib name ( as supplied in the call).
@@ -328,14 +329,14 @@ lib.sinclude.announce.get-attrs() {
 # Returns:      Iff enabled, the message on STDOUT
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.load-action() {
+bash-utils.source.announce.load-action() {
   local nm="${1:?'No lib name'}" abs="${2:-$1}"
-  lib.sinclude.announce.new-line
+  bash-utils.source.announce.new-line
 
-  lib.sinclude.announce.add-lib "$nm" "$abs"
+  bash-utils.source.announce.add-lib "$nm" "$abs"
   
-  lib.sinclude.announce.msg-body "$nm" "$abs" #la
-  local -A attrs ; eval $(lib.sinclude.announce.get-attrs)
+  bash-utils.source.announce.msg-body "$nm" "$abs" #la
+  local -A attrs ; eval $(bash-utils.source.announce.get-attrs)
 
   local type= msg= ; case ${SINCLUDE_VERBOSE:-n}:${attrs[type]} in
     2:load)   msg=" - Starting ..." ;;
@@ -347,32 +348,32 @@ lib.sinclude.announce.load-action() {
 
   case "${msg:-n}" in n) return ;; esac
 
-  lib.sinclude.announce.msg "$msg\c"
+  bash-utils.source.announce.msg "$msg\c"
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude.announce.load-done()
+# Function:     bash-utils.source.announce.load-done()
 # Description:  As it says on the tin - selectively reports the file load/source
 #               done event.
 # Takes:        none
 # Returns:      Iff enabled, the message on STDOUT
 # Variables:    $SINCLUDE_VERBOSE
 # ------------------------------------------------------------------------------
-lib.sinclude.announce.load-done() {
+bash-utils.source.announce.load-done() {
   : ${IncludeStack[@]}
   local msg=
-  local -A attrs ; eval $(lib.sinclude.announce.get-attrs)
+  local -A attrs ; eval $(bash-utils.source.announce.get-attrs)
   : ${IncludeStack[@]}
 
   local cont=${attrs[type]}:${SINCLUDE_VERBOSE:-n}:${attrs[has_nested]:-}
   case $cont in
     noload:1:*) ;;
-    noload:2:*) lib.sinclude.announce.msg " - Already loaded" ;;
-    *:1:*)      lib.sinclude.announce.msg "${1:-.}\c" ;;
-    *:2:t)      lib.sinclude.announce.msg-body "${attrs[nm]}" "${attrs[abs]}"
-                lib.sinclude.announce.msg " -\c"
+    noload:2:*) bash-utils.source.announce.msg " - Already loaded" ;;
+    *:1:*)      bash-utils.source.announce.msg "${1:-.}\c" ;;
+    *:2:t)      bash-utils.source.announce.msg-body "${attrs[nm]}" "${attrs[abs]}"
+                bash-utils.source.announce.msg " -\c"
                 ;&
-    *:2:*)      lib.sinclude.announce.msg " Done" ;;
+    *:2:*)      bash-utils.source.announce.msg " Done" ;;
   esac
 
   : ${#IncludeStack[@]} - ${#IncludeStack[@]}
@@ -383,10 +384,10 @@ lib.sinclude.announce.load-done() {
   : ${#IncludeStack[@]} - ${IncludeStack[@]}
 }
 
-lib.sinclude.announce.load-action "$BASH_SOURCE" "$Pself"
+bash-utils.source.announce.load-action "$BASH_SOURCE" "$Pself"
 
 # ------------------------------------------------------------------------------
-# Function:     lib.sinclude()
+# Function:     bash-utils.source()
 # Description:  Function to override the core '.' command
 # Opts:         None
 # Args:         $*  - one, or more, libraries - each of which specified as one
@@ -425,8 +426,8 @@ lib.sinclude.announce.load-action "$BASH_SOURCE" "$Pself"
 # .|source <dir>/<file> - PATH + dir(<file>)/<dir>
 # .|source <abs path>   - N/A
 # ------------------------------------------------------------------------------
-lib.sinclude() {
-  case $# in 0) lib.sinclude.fatal 'Nothing to load/include' ;; esac
+bash-utils.source() {
+  case $# in 0) bash-utils.source.fatal 'Nothing to load/include' ;; esac
 
   # Before anything else, append the bash-utils bin & lib subdirectories in this
   # repository to SINCLUDE_PATH
@@ -441,7 +442,7 @@ lib.sinclude() {
     case ${FUNCNAME[1]} in source|.) callers_dir=2 ;; esac
 
     callers_dir="${BASH_SOURCE[$callers_dir]%/*}"
-    callers_dir="$(lib.sinclude.abs-path $callers_dir)"
+    callers_dir="$(bash-utils.source.abs-path $callers_dir)"
     : $callers_dir, $PWD, $lib
     
     # Now selectively attempt to find the lib name - using the included files
@@ -470,23 +471,34 @@ lib.sinclude() {
             ;;
     esac
 
-    : $(builtin echo $fqlib* ${fqlib:-}*)
-    : $(ls $fqlib)
+    # All ready to go, so announce it
+    bash-utils.source.announce.load-action "$lib" "$fqlib"
+
     case "$(builtin echo ${fqlib:-}*)" in
-      *\*)  lib.sinclude.fatal "File not found: '$lib' - '${fqlib:-unset}'" ;;
+      *\*)  case ${FUNCNAME[1]} in
+              *.ifsource) case ${SINCLUDE_VERBOSE:-n} in
+                            2)  bash-utils.source.announce.msg " Not found" ;;
+                          esac
+
+                          continue
+                          ;;
+              *)          bash-utils.source.fatal \
+                            "File not found: '$lib' - '${fqlib:-unset}'"
+                          ;;
+            esac
+            ;;
     esac
 
-    # All ready to go, so announce it
-    lib.sinclude.announce.load-action "$lib" "$fqlib"
-
     # Load it as required i.e. iff (re)loading
-    local -A attrs ; eval $(lib.sinclude.announce.get-attrs)
+    local -A attrs ; eval $(bash-utils.source.announce.get-attrs)
     case ${attrs[type]} in load|reload) builtin . $fqlib ;; esac
 
     # Now announce completion
-    lib.sinclude.announce.load-done #"$fqlib "
+    bash-utils.source.announce.load-done #"$fqlib "
   done
 }
+
+bash-utils.ifsource() { bash-utils.source $@ ; }
 
 # ------------------------------------------------------------------------------
 # Function:     .()
@@ -514,7 +526,7 @@ lib.sinclude() {
 # Notes:        The directory containing this script is auto-added to PATH
 #               itself.
 # ------------------------------------------------------------------------------
-.() { lib.sinclude $@ ; }
+.() { bash-utils.source $@ ; }
 
 # ------------------------------------------------------------------------------
 # Function:     .()
@@ -525,15 +537,13 @@ lib.sinclude() {
 # Returns:      0 iff all files were included successfully
 # Variables:    $IncludeStack - see above :-)
 # ------------------------------------------------------------------------------
-source() { lib.sinclude $@ ; }
-
-#Included+=( ["$Pself"]= )
+source() { bash-utils.source $@ ; }
 
 # Reset the first pass flag
 unset FirstPass
 
 # Ensure the loaded message is generated for this lib (if appropriate)
-lib.sinclude.announce.load-done #fl
+bash-utils.source.announce.load-done #fl
 
 # Before including the/any given files
 : "$# - '$@'"

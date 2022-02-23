@@ -1,15 +1,15 @@
-FNNAME=lib.sinclude LNAME=${FNNAME//./\/}.sh PDIR=src/main
+FNNAME=bash-utils.source LNAME=${FNNAME#*.}.sh PDIR=src/main/lib
 LDIR=$(cd $PDIR >/dev/null && pwd)
 
-include-it() {
-  : $FNNAME, $LNAME, $PDIR, $LDIR
-  local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
-
-  builtin . $lib
-  if test "${flag:-}" ; then builtin . $lib ; fi
-}
-
 Describe "The OUT ('$LNAME') itself"
+  include-it() {
+    : $FNNAME, $LNAME, $PDIR, $LDIR
+    local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
+
+    builtin . $lib
+    if test "${flag:-}" ; then builtin . $lib ; fi
+  }
+
   Context  'can be sourced - default behaviours - should '
     It 'be silent & without error'
       When run include-it
@@ -23,7 +23,8 @@ Describe "The OUT ('$LNAME') itself"
       The status should be success
       The stdout should equal ''
       The stderr should equal ''
-      The value "$(type -t lib.sinclude)" should equal 'function'
+      The value "$(type -t bash-utils.source)" should equal 'function'
+      The value "$(type -t source)" should equal 'function'
     End
 
     It 'fail to reload itself'
@@ -33,7 +34,7 @@ Describe "The OUT ('$LNAME') itself"
       The stderr should equal ''
       #\
       #  "WARNING !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') already loaded"
-      The value "$(type -t lib.sinclude)" should equal 'function'
+      The value "$(type -t bash-utils.source)" should equal 'function'
     End
 
     It 'reload itself when enabled (using non-empty SINCLUDE_RELOAD)'
@@ -42,7 +43,7 @@ Describe "The OUT ('$LNAME') itself"
       The status should be success
       The stdout should equal ''
       The stderr should equal ''
-      The value "$(type -t lib.sinclude)" should equal 'function'
+      The value "$(type -t bash-utils.source)" should equal 'function'
     End
   End
 
@@ -69,7 +70,7 @@ Describe "The OUT ('$LNAME') itself"
         The status should be success
         The stdout should equal ''
         The stderr should equal ''
-        The value "$(type -t lib.sinclude)" should equal 'function'
+        The value "$(type -t bash-utils.source)" should equal 'function'
       End
 
       Example "fail to reload itself - SINCLUDE_VERBOSE=${1:-unset}"
@@ -145,7 +146,7 @@ Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Reloading ... Done"
         The status should be success
         The stdout should equal "$(report_string $1 reload)"
         The stderr should equal ''
-        The value "$(type -t lib.sinclude)" should equal 'function'
+        The value "$(type -t bash-utils.source)" should equal 'function'
       End
     End
   End
@@ -196,10 +197,8 @@ Describe 'Inclusion of the OUT by an external file'
 
       mkdir -p $sub
 
-      echo return > $lower
-      cat<<!>$upper
-. sub/lower.sh
-!
+      builtin echo return > $lower
+      builtin echo ". sub/lower.sh" >$upper
 
       . $PDIR/$LNAME
       . $upper
@@ -242,16 +241,15 @@ Source: '$TDIR/upper.sh' - Done"
   End
 End
 
-Describe 'Recursive inclusion handling'
+Include $PDIR/$LNAME
+
+Describe 'recursive inclusion detection & handling'
   Fname=$SHELLSPEC_TMPBASE/my-test.sh
 
-  It 'detects direct recursion'
+  It 'direct recursion attempts are fatal'
     run-it() {
-      cat<<!>$Fname
-. $Fname
-!
+      builtin echo ". $Fname" >$Fname
 
-      . $PDIR/$LNAME
       . $Fname
     }
 
@@ -262,13 +260,12 @@ Describe 'Recursive inclusion handling'
       "FATAL !!! Direct recursive inclusion detected in '$Fname'"
   End
 
-  It 'detects indirect recursion'
+  It 'indirect recursion attempts are fatal'
     run-it() {
       sub=$SHELLSPEC_TMPBASE/sub.sh
       builtin echo ". $sub" >$Fname
       builtin echo ". $Fname" >$sub
 
-      . $PDIR/$LNAME
       . $Fname
     }
 
@@ -278,6 +275,42 @@ Describe 'Recursive inclusion handling'
     The stderr should equal \
       "FATAL !!! Indirect recursive inclusion detected in '$Fname'"
   End
+End
+
+Describe "inclusion of non-existant file(s) isn't fatal"
+  Describe "continues silently for non & cursory verbose mode"
+  It 'does so silently for non-verbose mode (SINCLUDE_VERBOSE=0)'
+      When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
+      The status should be success
+      The stdout should equal ''
+      The stderr should equal ''
+    End
+
+    It "continues silently when non-verbose mode (SINCLUDE_VERBOSE=1)"
+      SINCLUDE_VERBOSE=1
+
+      When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
+      The status should be success
+      The stdout should equal '
+.'
+      The stderr should equal ''
+    End
+  End
+
+  It 'reports correctly when in verbose mode (SINCLUDE_VERBOSE=2)'
+    SINCLUDE_VERBOSE=2
+    When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
+    The status should be success
+    The stdout should equal "\
+Source: '$SHELLSPEC_TMPBASE/non-exist.sh' - Starting ... Not found"
+    The stderr should equal ''
+  End
+End
+
+Describe 'inclusion of mulitiple file on same line'
+End
+
+Describe 'inclusion of mulitiple file in same namespace'
 End
 
 #### END OF FILE
