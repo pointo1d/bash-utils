@@ -85,18 +85,24 @@
 
 # As data definitions with no initial vlaue don't affect the value of the
 # variables, define the record of...
+#   * The shortcuts list
 #   * the totality of included files and ...
 #   * the current include stack (for non-quiet announcements)
-declare -A Included ; declare -a IncludeStack
+declare -A BASH_UTILS_SOURCE_SHORTCUTS Included ; declare -a IncludeStack
+
+# Now do the 1st pass processing
 declare FirstPass=$(type -t source) ; case "${FirstPass//function}" in
-  builtin)  FirstPass=t
+  builtin)  # Do the first pass stuff
+            FirstPass=t
             declare -A attrs
             attrs=( [abs]='' [nm]='' [type]='' [has_nested]='' )
             IncludeStack=( "$(declare -p attrs)" )
+
+            declare d=${BASH_SOURCE%/*} ; d=${d:-=n}
+            BASH_UTILS_SOURCE_SHORTCUTS["bash-utils"]="$(cd $d>/dev/null ; echo $PWD)"
             ;;
   *)        FirstPass= ;;
 esac
-: "${#IncludeStack[@]} - ${IncludeStack[@]}"
 
 # ------------------------------------------------------------------------------
 # Function:     bash-utils.source.warning()
@@ -448,12 +454,21 @@ bash-utils.source() {
     # Now selectively attempt to find the lib name - using the included files
     # name/path
     local fqlib= ; case "$lib" in
+      !*)   # Shortcut prefix, so extract it and attempt to look it up
+            local sc=${lib%%/*} ; sc=${sc/!}
+            case ${BASH_UTILS_SOURCE_SHORTCUTS[$sc]:-n} in
+              n)  bash-utils.source.fatal "Shortcut not found: $sc (in $lib)" ;;
+            esac
+
+            # Finally, record the composite full path
+            fqlib=${BASH_UTILS_SOURCE_SHORTCUTS[$sc]:-}/${lib#*/}
+            ;;
       /*)   # Absolutely pathed, so nowt else to do other than record it
             fqlib="$lib"
             ;;
       */*)  # Relative to the callers path, so iterate thro' SINCLUDE_PATH and
             # then, possibly, PATH itself
-            local all_paths="$callers_dir:$PWD:$PATH"
+            local all_paths="$callers_dir:$PWD:${SINCLUDE_PATH:+$SINCLUDE_PATH:}$PATH"
             while read fqlib ; do
               : $fqlib, $lib
               fqlib="$fqlib/$lib"
@@ -467,7 +482,16 @@ bash-utils.source() {
             # directory MUST be on the PATH, accordingly prefix a local copy of
             # it ($PATH) it with $SINCLUDE_PATH
             local PATH=${SINCLUDE_PATH:+$SINCLUDE_PATH:}$PATH
-            fqlib="$lib"
+
+            local f=() ; mapfile -t f < <(
+              exec 2>&1
+              PS4='#$BASH_SOURCE '
+              unset BASH_XTRACEFD
+              set -x
+              builtin . $lib
+            )
+
+            fqlib="$(builtin echo ${f[2]} | sed 's,##*\([^  ]*\).*,\1,')"
             ;;
     esac
 

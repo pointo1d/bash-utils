@@ -151,40 +151,60 @@ Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Reloading ... Done"
     End
   End
 
-  Describe 'make other bash-utils libraries auto-accessible'
-    #Include $PDIR/$LNAME
+  Describe 'make bash-utils libraries accessible'
     include-it() {
-      . $PDIR/$LNAME
-      eval $@
+      local fnm=$1 ; shift
+      builtin . $PDIR/$LNAME
+      . $fnm
     }
 
-    Context 'simple e.g. console'
-      Parameters
-        . console.sh
-        source console.sh
+    Describe "explicitly i.e. using the '!bash-utils' shortcut"
+      Fnm=!bash-utils/console.sh
+
+      Describe "simple"
+        It "'$Fnm'"
+          When run include-it "$Fnm"
+          The output should equal ''
+          The stderr should equal ''
+          The status should equal 0
+        End
       End
 
-      Example "$1 $2"
-        When run include-it
-        The output should equal ''
-        The stderr should equal ''
-        The status should equal 0
+      Fnm=!bash-utils/console/help.sh
+
+      Describe "complex"
+        It "'$Fnm'"
+          When run include-it "$Fnm"
+          The output should equal ''
+          The stderr should equal ''
+          The status should equal 0
+        End
       End
     End
 
-    Describe "complex e.g. 'console/help'"
-      Parameters
-        . console/help.sh
-        source console/help.sh
+    Describe 'implicitly i.e. by default'
+      Fnm=console.sh
+
+      Context 'simple'
+        It "$Fnm"
+          When run include-it "$Fnm"
+          The output should equal ''
+          The stderr should equal ''
+          The status should equal 0
+        End
       End
 
-      Example "$1 $2"
-        When run include-it
-        The output should equal ''
-        The stderr should equal ''
-        The status should equal 0
+      Describe "complex"
+        Fnm=console/help.sh
+
+        It "$Fnm"
+          When run include-it "$Fnm"
+          The output should equal ''
+          The stderr should equal ''
+          The status should equal 0
+        End
       End
-    End
+    End   
   End
 End
 
