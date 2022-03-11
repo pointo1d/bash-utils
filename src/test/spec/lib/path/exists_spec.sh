@@ -1,22 +1,23 @@
-Describe 'lib.path'
+FNAME='bash-utils.path.exists'
+Describe "$FNAME"
   Include src/main/lib/path.sh
 
-  Describe 'lib.path.exists'
-    call-it() { lib.path.exists $@ ; }
+  Describe "$FNAME"
+    call-it() { $FNAME $@ ; }
 
-    It 'lib.path.exists /tmp - /tmp to STDOUT'
-      When call lib.path.exists $PWD
+    It "$FNAME /tmp - /tmp to STDOUT"
+      When call $FNAME $PWD
       The output should equal $PWD
     End
 
-    It 'lib.path.exists /tmp - reports /tmp to STDOUT'
-      When call lib.path.exists /tmp
+    It "$FNAME /tmp - reports /tmp to STDOUT"
+      When call $FNAME /tmp
       The output should equal /tmp
     End
 
-    It 'lib.path.exists - reports file not found'
-      When run call-it $BASH_SOURCE.not-exists
-      The stderr should include "not found: $BASH_SOURCE.not-exists"
+    It "$FNAME - reports file not found"
+      When run call-it $SHELLSPEC_TMPBASE.not-exists
+      The stderr should include "not found: $SHELLSPEC_TMPBASE.not-exists"
       The status should not equal 0
     End
   End

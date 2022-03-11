@@ -1,4 +1,4 @@
-FNAME=lib.path.update-var
+FNAME=bash-utils.path.update-var
 
 Describe "$FNAME"
   Include src/main/lib/path.sh

@@ -1,7 +1,6 @@
-Describe 'lib.path'
+FNAME='bash-utils.path.error.not-found'
+Describe "$FNAME"
   Include src/main/lib/path/error.sh
-
-  export FNAME=lib.path.error.not-found
 
   Describe "$FNAME"
     call-it() { $FNAME $@ ; }

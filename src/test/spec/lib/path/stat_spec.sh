@@ -1,4 +1,4 @@
-export FNAME=lib.path.stat
+export FNAME=bash-utils.path.stat
 Describe $FNAME
   Include src/main/lib/path.sh
   run-it() { $FNAME $@ ; }
@@ -12,18 +12,18 @@ Describe $FNAME
 
   It "GP: $FNAME $0 - extant path"
     When call $FNAME $0
-    The output should start with "File: $0 "
+    The output should start with "$0 "
     The status should equal 0
   End
 
   It "GP: $FNAME $(dirname $0) - extant dir"
-    When call $FNAME $(dirname $0)
-    The output should start with "File: $(dirname $0) "
+    When call $FNAME $SHELLSPEC_TMPBASE
+    The output should start with "$SHELLSPEC_TMPBASE "
     The status should equal 0
   End
 
   It "GP: $FNAME $(dirname $0) - non-extant"
-    When call $FNAME $(dirname $0)ff
+    When call $FNAME ${SHELLSPEC_TMPBASE}ff
     The output should equal ''
     The status should equal 0
   End

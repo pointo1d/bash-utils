@@ -3,12 +3,15 @@
 # File:		path.sh
 # Description:	Shell script implementing library path related functions
 ################################################################################
-
+# shellcheck disable=SC2086
 eval ${LIB_PATH_SH:-} ; export LIB_PATH_SH=return
+
+# shellcheck disable=SC1090
 . ${BASH_SOURCE/.sh}/error.sh
+. ${BASH_SOURCE/.sh}/update-var.sh
 
 # ------------------------------------------------------------------------------
-# Function:     lib.path.stat()
+# Function:     bash-utils.path.stat()
 # Description:  Library function to return the stat details for the given path,
 #               if it exists.
 # Options:      As per stat(1), terse ('t') by default
@@ -16,20 +19,21 @@ eval ${LIB_PATH_SH:-} ; export LIB_PATH_SH=return
 # Returns:      The stat(1) output on STDOUT iff it (the given path) exists,
 #               empty string otherwise
 # ------------------------------------------------------------------------------
-lib.path.stat() {
+bash-utils.path.stat() {
   # Load the full opt & arg list
-  local args=( $@ )
+  local args=( "$@" )
 
   # Separate the opts & the path
-  local opts=${args[@]::${#args[@]}-1} path=${args[-1]:?'No path to test'}
+  local opts=( "${args[@]::${#args[@]}-1}" ) path=${args[-1]:?'No path to test'}
 
   # Now do the stat(1) in a sub-shell to save groking the ruling i.e. call time,
   # shopt
-  echo $(stat ${args[@]:-'-t'} $path 2>/dev/null ; return 0)
+  # shellcheck disable=SC2046,SC2068
+  builtin echo $(stat ${opts[@]:-'-t'} $path 2>/dev/null)
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.path.exists()
+# Function:     bash-utils.path.exists()
 # Description:  Path library routine to whether, or not, the given path exists
 #               in an errexit compliant fashion i.e. the non-existence of the
 #               path does not cause the consuming script to automatically abort
@@ -45,14 +49,15 @@ lib.path.stat() {
 # Env vars:     None
 # Notes:        '-q' implies '-f'
 # ------------------------------------------------------------------------------
-lib.path.exists() {
-  local OPTARG OPTIND opt quiet= sev=f
+bash-utils.path.exists() {
+  local OPTARG OPTIND opt quiet sev=f
   while getopts 'qs:' opt ; do
+    # shellcheck disable=SC2220
     case $opt in
       q)  quiet=t ;;
       s)  case o${OPTARG//[fw]} in
             o)  sev=$OPTARG ;;
-            *)  lib.console.fatal "Unknown severity: $sev" ;;
+            *)  bash-utils.console.fatal "Unknown severity: $sev" ;;
           esac
           ;;
     esac
@@ -61,6 +66,7 @@ lib.path.exists() {
   shift $((OPTIND - 1))
 
   # 1st - determine if the path exists - but do nothing yet about the outcome
+  # shellcheck disable=SC2155
   local exists="$(builtin echo ${1:-'No path to test'}*)"
 
   # Now reduce it to the last char, removing the star (if present)
@@ -68,15 +74,15 @@ lib.path.exists() {
 
   : "${exists:+y}:${quiet:-n}:${sev}"
   case "${exists:+y}:${quiet:-n}:${sev}" in
-    y:n:*)  echo $1 ;;
+    y:n:*)  builtin echo $1 ;;
     *:n:i|\
     y:t:*)  ;;
-    :*:*)   lib.path.error.not-found -s$sev "$1" ;;
+    :*:*)   bash-utils.path.error.not-found -s$sev "$1" ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.path.type()
+# Function:     bash-utils.path.type()
 # Description:  Path library routine to determine the 'type' of the given path
 #               as determined by the the first character output from an
 #               'ls -al PATH' command with 3 provisos...
@@ -101,11 +107,11 @@ lib.path.exists() {
 #               return and a fatal error report on STDERR.
 # Env vars:     None
 # ------------------------------------------------------------------------------
-lib.path.type() {
+bash-utils.path.type() {
   local path=${1:-'No path to test'}
 
   # Non-existence of the path is always fatal!!
-  lib.path.exists $path
+  bash-utils.path.exists $path
 
   # Determine the type
   type=$(ls -ald $path) ; type=${type:0:1}
@@ -114,6 +120,7 @@ lib.path.type() {
   case $type in
     d)  # It'#s a directory, extra work involved to determine if there's a Git
         # context
+        # shellcheck disable=SC2155
         local git="$(git -C $path rev-parse --show-toplevel 2>/dev/null | sed 's,\(.\):,\L/\1,')"
         git=${git//$HOME\/}
 
@@ -128,11 +135,11 @@ lib.path.type() {
         ;;
   esac
 
-  echo $type
+  builtin echo $type
 }
 
 ################################################################################
-# Function:     lib.path.is-type()
+# Function:     bash-utils.path.is-type()
 # Description:  Core function to determine if the type of the given path is the
 #               same as expected i.e. as given.
 # Opts:         None
@@ -142,20 +149,51 @@ lib.path.type() {
 #               file doesn't exist.
 # To do:        Validate the given 'type'
 ################################################################################
-lib.path.is-type() {
+bash-utils.path.is-type() {
   local type=${1:-f} path="${2:?'No path to test'}" match=
 
-  lib.path.exists -qsf $path
+  bash-utils.path.exists -qsf $path
   
   # Exists, so continue by attempting to determine if the type matches
   case "$(ls -ald $path)" in ${type/f/-}*) match=y ;; esac
 
   # And report it
-  echo $match
+  builtin echo $match
+}
+
+
+################################################################################
+# Function:     bash-utils.path.is-type()
+# Description:  Core function to determine if the type of the given path is the
+#               same as expected i.e. as given.
+# Opts:         None
+# Args:         $1  - the expected type, default - 'f' i.e. plain file
+#               $2  - the path to check
+# Returns:      0 on STDOUT iff the types match exists, '' if not, fatal if the
+#               file doesn't exist.
+# To do:        Validate the given 'type'
+###############################################################################
+bash-utils.path.is-dir() {
+  bash-utils.path.is-type d "${1:?'No path to test'}"
 }
 
 ################################################################################
-# Function:     lib.path.get-type()
+# Function:     bash-utils.path.is-type()
+# Description:  Core function to determine if the type of the given path is the
+#               same as expected i.e. as given.
+# Opts:         None
+# Args:         $1  - the expected type, default - 'f' i.e. plain file
+#               $2  - the path to check
+# Returns:      0 on STDOUT iff the types match exists, '' if not, fatal if the
+#               file doesn't exist.
+# To do:        Validate the given 'type'
+###############################################################################
+bash-utils.path.is-file() {
+  bash-utils.path.is-type f "${1:?'No path to test'}"
+}
+
+################################################################################
+# Function:     bash-utils.path.get-type()
 # Description:  Core function to determine and return on STDOUT, the 'type' of
 #               the given path as reported by ls -al with 3 provisos...
 #                 *   '-' becomes 'f'.
@@ -176,12 +214,14 @@ lib.path.is-type() {
 # Returns:      0 iff the path exists or path does exist when existence is
 #               non-fatal.
 ################################################################################
-lib.path.get-type() {
-  lib.path.exists -qsf "${1:?'No path to test'}"
+bash-utils.path.get-type() {
+  bash-utils.path.exists -qsf "${1:?'No path to test'}"
+  # shellcheck disable=SC2155
   local type="$(ls -ld $1)" ; type=${type:0:1} ; type=${type/-/f}
 
   case $type in
     d)  # a directory may need extra handling (it might be a Git repo element)
+        # shellcheck disable=SC2155
         local git="$(git -C $1 rev-parse --show-toplevel 2>/dev/null | sed 's,\(.\):,\L/\1,')"
         git=${git//$HOME\/}
 
@@ -197,96 +237,49 @@ lib.path.get-type() {
         ;;
   esac
 
-  echo $type
+  builtin echo $type
 }
-################################################################################
-# Function:     lib.path.update-var()
-# Description:  Utility function to update the given/default path orientated
-#               variable.
-# Opts:         -n STR  - STR specifies the variable to be updated, default -
-#                         'PATH'
-#               -o CHR  - CHR specifies the operation to be performed as one of
-#                         the following ...
-#                           * 'a' - append the value(s) (if not already present)
-#                           * 'p' - prepend the value(s) (if not already
-#                                   present)
-#                           * 'r' - remove the value(s) (if present)
-#                         By default, 'a' (append) is assumed.
-#               -s CHR  - specify the severity of a non-existant element before
-#                         adding - as one of the following...
-#                           * 'f' - fatal
-#                           * 'i' - ignore
-#                           * 'w' - warn
-#                         By default, this is 'i' (ignore) i.e. the variable is
-#                         updated irrespective of the existence of the path
-#                         where non-existence goes unreported.
-# Args:         $*      - the path(s) with which to update the variable
-# Returns:      0 iff the path exists or path does exist when existence is
-#               non-fatal.
-# Notes:
-################################################################################
-lib.path.update-var() {
-  local OPTARG OPTIND opt op=a sev=i vname=PATH
-  while getopts 'n:o:s:' opt ; do
-    case $opt in
-      n)  vname=$OPTARG ;;
-      o)  case o${OPTARG//[apr]} in
-            o)  ;;
-            *)  lib.console.fatal "Unknown op: $OPTARG" ;;
-          esac
 
-          op=$OPTARG
-          ;;
-      s)  case o${OPTARG//[fiw]} in
-            o)  ;;
-            *)  lib.console.fatal "Unknown severity: $OPTARG" ;;
-          esac
+# ------------------------------------------------------------------------------
+# Function:     bash-utils.path.get-absolute()
+# Description:  Routine to take a path and return its fully pathed equivalent.
+# Takes:        $1  - path.
+# Returns:      Fully pathed equivalent of the given path on STDOUT
+# Variables:    None.
+# ------------------------------------------------------------------------------
+bash-utils.path.get-absolute() {
+  local path="${1:?'No path to convert'}" dir file
 
-          sev=$OPTARG
-          ;;
-    esac
-  done
+  # Extract the directory element iff its not a directory
+  case $(bash-utils.path.is-dir "$path") in
+    y)  dir="$path" ;;
+    *)  dir="${path%/*}" ; file="${path##*/}" ;;
+  esac
 
-  shift $((OPTIND - 1))
+  # shellcheck disable=SC2086
+  case "${1:?'No path to convert'}" in
+    */*)  ( cd ${dir}>/dev/null && builtin echo $PWD${file:+/$file} ) ;;
+    *)    builtin echo $PWD/$1 ;;
+  esac
+}
 
-  : $#
-  case $# in 0) lib.console.fatal 'No paths' ;; esac
+# ------------------------------------------------------------------------------
+# Function:     bash-utils.path.is-absolute()
+# Description:  Routine to take a path and determined if it's an absolute path.
+# Takes:        $1  - path.
+#               $2  - if given, specifies that a non-absolute path is fatal.
+# Returns:      Updated STDOUT - 'y' iff the given path is absolue, 'n'
+#               otherwise.
+# Variables:    None.
+# ------------------------------------------------------------------------------
+bash-utils.path.is-absolute() {
+  local ret ; case "${1:?'No path to test'}" in /*) ret=y ;; esac
+  case ${ret:-n}:${2:-n} in
+    n:n)  ;;
+    n:*)  bash-utils.console.fatal "Path isn't absolute: '$1'" ;;
+  esac
 
-  local path ; for path ; do
-    : $path
-
-    # 1st off, ensure the variable value is topped & tailed by ':'
-    local val=":${!vname}:"
-
-    case $op in
-      r)  # It's a removal, so carry on regardless - now remove the instance(s)
-          # of the given path
-          val=${val//:$path:/:}
-          ;;
-      *)  # It's an update, so 1st ensure non-existence isn't a problem
-          case $(ls -ad $path 2>/dev/null | echo n)::$sev in
-            n::i) ;;
-            n::*) lib.path.error.not-found -s$sev "$path" ;;
-          esac
-
-          # Finally, if all's ok thus far, set the new value iff it isn't
-          # already present (somewhere :-)
-          case "${val//:$path:}" in
-            $val) case $op in
-                    a)  val="${!vname}:$path" ;;
-                    p)  val="$path:${!vname}" ;;
-                  esac
-                  ;;
-          esac
-          ;;
-    esac
-
-    # Tidy up the variable by replacing '::' with ':' globally
-    val="$(echo $val | sed 's,::,:,g; s,^:,,; s,:$,,')"
-
-    # Finally, update the variable
-    export $vname="$val"
-  done
+  builtin echo ${ret:-}
 }
 
 #### END OF FILE
