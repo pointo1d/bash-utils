@@ -70,7 +70,7 @@ bash-utils.path.exists() {
   local exists="$(builtin echo ${1:-'No path to test'}*)"
 
   # Now reduce it to the last char, removing the star (if present)
-  exists=${exists: -1} ; exists=${exists/\*}
+  exists=${exists:-1} ; exists=${exists/\*}
 
   : "${exists:+y}:${quiet:-n}:${sev}"
   case "${exists:+y}:${quiet:-n}:${sev}" in
