@@ -1,7 +1,7 @@
 FNNAME=bash-utils.source LNAME=${FNNAME#*.}.sh PDIR=src/main/lib
 LDIR=$(cd $PDIR >/dev/null && pwd)
 
-Describe "ease of use"
+Describe "ease of consumption"
   include-it() {
     local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
 
@@ -211,10 +211,6 @@ Describe "non-standard file names"
     The stdout should equal ''
     The stderr should equal ''
   End
-End
-
-Describe "ease of consumption"
-  Skip "On to-do list"
 End
 
 Describe "one-liner multi-file inclusion"

@@ -85,7 +85,6 @@
 # * 1 - cursory
 # * 2 - verbose
 ################################################################################
-: $# - $@
 # As data definitions with no initial vlaue don't affect the value of the
 # variables, define the record of...
 #   * The shortcuts list
@@ -99,9 +98,9 @@ declare PSELF
 
 case $(type -t source) in
   builtin)  # Do the first pass stuff
-            builtin . ${BASH_SOURCE/source/path}
-            builtin . ${BASH_SOURCE/source.sh}/path/update-var.sh
-            builtin . ${BASH_SOURCE/source/console}
+            builtin . "${BASH_SOURCE/source/path}"
+            builtin . "${BASH_SOURCE/source.sh}/path/update-var.sh"
+            builtin . "${BASH_SOURCE/source/console}"
 
             # shellcheck disable=SC2128
             PSELF="$(bash-utils.path.get-absolute "$BASH_SOURCE")"
@@ -335,8 +334,7 @@ bash-utils.source.announce.load-done() {
 
                 bash-utils.source.announce.msg "$msg"
                 ;;
-    *:1:*)      : ${not_found:-n}
-                case ${not_found:-n} in
+    *:1:*)      case ${not_found:-n} in
                   n)  bash-utils.source.announce.msg ".\c" ;;
                 esac
                 ;;
@@ -344,7 +342,6 @@ bash-utils.source.announce.load-done() {
                   "${attribs[nm]}" "${attribs[abs]}"
                 bash-utils.source.announce.msg " -\c"
                 ;&
-    *:2:*)      bash-utils.source.announce.msg " Done" ;;
   esac
 
   case ${#IncludeStack[@]} in
@@ -353,7 +350,7 @@ bash-utils.source.announce.load-done() {
   esac
 }
 
-# shellcheck disable=sc2128
+# shellcheck disable=SC2128
 bash-utils.source.announce.load-action "$BASH_SOURCE" "$PSELF"
 
 # ------------------------------------------------------------------------------
@@ -364,12 +361,11 @@ bash-utils.source.announce.load-action "$BASH_SOURCE" "$PSELF"
 # ------------------------------------------------------------------------------
 try-lib-path() {
   local path="${1:?'No lib name to try'}"
-  : $PATH
 
   # finally attempt to use the shell to find the name
   local f=() ; mapfile -t f < <(
     exec 2>&1
-    ps4='#$BASH_SOURCE '
+    PS4='#$BASH_SOURCE '
     unset BASH_XTRACEFD
     set -x
     builtin . "$path"
@@ -393,7 +389,6 @@ detect-recursive-inclusion() {
                 ;;
   esac
 
-  : $path, ${BASH_SOURCE[2]}
   case "${BASH_SOURCE[@]}" in
     *$path*)  bash-utils.console.fatal \
                 "Recursive inclusion detected in '$nm'"
@@ -423,6 +418,7 @@ load-it() {
           esac
 
           # Use the expanded path to go further
+          # shellcheck disable=SC2086
           load-it \
             "$nm" \
             "${path/!$sc/${BASH_UTILS_SOURCE_SHORTCUTS[$sc]:-}}" \
@@ -434,6 +430,7 @@ load-it() {
           # turn
           ((depth+=1)) ; : $depth
 
+          # shellcheck disable=SC2012,SC2162
           ls -1 "$path" | while read path ; do
             bash-utils.source.announce.load-action "$nm" "$path"
             load-it "$nm" "$path" $depth
@@ -454,14 +451,16 @@ load-it() {
           PATH="${BASH_SOURCE[3]%/*}:$PWD:$DSELF:${DSELF/lib/bin}:$PATH"
           case "$nm" in
             */*)  path=
-                  local _path ; while read _path ; do
-                  local fqpath="$_path/$nm"
-                  case "$(bash-utils.path.exists "$fqpath")" in
-                    $fqpath)  path="$_path/$nm"
-                              break
-                              ;;
-                  esac
-                done < <(builtin echo -e ${PATH//:/\\n})
+                  local _path
+                  # shellcheck disable=SC2162,SC2086
+                  while read _path ; do
+                    local fqpath="$_path/$nm"
+                    case "$(bash-utils.path.exists "$fqpath")" in
+                      $fqpath)  path="$_path/$nm"
+                                break
+                                ;;
+                    esac
+                  done < <(builtin echo -e ${PATH//:/\\n})
                 ;;
             *)  # finally attempt to use the shell to find the name
                 local f=() ; mapfile -t f < <(
