@@ -1,5 +1,5 @@
-FNNAME=lib.console
-LNAME=src/main/${FNNAME//./\/}.sh
+FNNAME=bash-utils.console
+LNAME=src/main/${FNNAME/bash-utils./lib\/}.sh
 Include $LNAME
 
 Describe "Unit test suite for $LNAME)"
@@ -41,7 +41,7 @@ Describe "Unit test suite for $LNAME)"
       trace
     End
 
-    Example "lib.console.$1() identifies the message correctly"
+    Example "bash-utils.console.$1() identifies the message correctly"
       invoke-it() { local fn=${FNNAME//.die}.$1 ; eval $fn "${1^^}" ; }
 
       When run invoke-it $1

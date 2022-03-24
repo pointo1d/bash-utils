@@ -17,7 +17,7 @@ export LIB_CONSOLE_SH=return
 # Takes:        $*  - the message to print to STDERR - note that escape sequence
 #                     contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.to-stderr() { echo -e "$@" >&2 ; }
+bash-utils.console.to-stderr() { echo -e "$@" >&2 ; }
 
 # Load the logger - initially basic, but extendable post-init
 # . ${BASH_SOURCE//console/log4sh}
@@ -40,18 +40,18 @@ declare -A \
 declare -A Severities=()
 
 # ------------------------------------------------------------------------------
-# Function:     lib.console._gen-msg-logger()
+# Function:     bash-utils.console._gen-msg-logger()
 # Description:  Utility routine provided to generate a message logger routine
 # Takes:        None.
 # Variables:    $SeverityTypes  - assoc array defining the possible message
 #                                 types
 # ------------------------------------------------------------------------------
-lib.console._gen-msg-logger() {
+bash-utils.console._gen-msg-logger() {
   local nm=${1:?'No msg logger name'} typ=${2:?'No msg logger type'}
   local init=${nm:0:1}
 
   Severities[$init]=$nm
-  local fn_nm="lib.console.$nm"
+  local fn_nm="bash-utils.console.$nm"
 
   local code ; case ${SeverityTypes[$nm]:-n} in
     y) code='exit ${ExitStatus[rc]}'
@@ -60,8 +60,8 @@ lib.console._gen-msg-logger() {
   # Generate the routine
   eval "
   $fn_nm() {
-    lib.console._extract-rc \$*
-    lib.console.to-stderr \"${nm^^}!! \${ExitStatus[msg]}\"
+    bash-utils.console._extract-rc \$*
+    bash-utils.console.to-stderr \"${nm^^}!! \${ExitStatus[msg]}\"
 
   }
   $code
@@ -74,16 +74,16 @@ lib.console._gen-msg-logger() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.console.init()
+# Function:     bash-utils.console.init()
 # Description:  Utility routine to initialise the conle logging "subsystem".
 # Takes:        None.
 # Returns:      The standard form comprising a string on STDOUT where the exit
 #               status is always the first token and the message the rest of the
 #               string thereafter.
 # ------------------------------------------------------------------------------
-lib.console.init() {
+bash-utils.console.init() {
   local n ; for n in ${!SevPriorities[@]} ; do
-    lib.console._gen-msg-logger ${SevPriorities[$n]} $n
+    bash-utils.console._gen-msg-logger ${SevPriorities[$n]} $n
   done
 }
 
@@ -97,7 +97,7 @@ lib.console.init() {
 #               status is always the first token and the message the rest of the
 #               string thereafter.
 # ------------------------------------------------------------------------------
-lib.console._extract-rc() {
+bash-utils.console._extract-rc() {
   ExitStatus=([rc]=1 [msg]='')
 
   case $(expr $1 : '[^0-9]') in
@@ -115,12 +115,12 @@ lib.console._extract-rc() {
 # Variables:    $NO_CLEAR_SCREEN  - the screen is cleared iff undefined or
 #                                   defined as an empty value.
 # ------------------------------------------------------------------------------
-lib.console.clear-screen() {
+bash-utils.console.clear-screen() {
   case "n$NO_CLEAR_SCREEN" in n) ;; *) clear ;; esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     lib.console.die()
+# Function:     bash-utils.console.die()
 # Description:  Routine provided to keep things DRY by replacing the requirement
 #               for repeated 'echo -e "..." >&2' blocks with a call to this
 #               routine.
@@ -129,17 +129,17 @@ lib.console.clear-screen() {
 #                     and used for the exit status; Note also, that escape
 #                     sequences contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.die() {
+bash-utils.console.die() {
   local prefix=Died ; case ${FUNCNAME[1]} in
-    lib.console.error|\
-    lib.console.fatal|\
-    lib.console.unknown)  prefix=${FUNCNAME[1]//lib.console.}
+    bash-utils.console.error|\
+    bash-utils.console.fatal|\
+    bash-utils.console.unknown)  prefix=${FUNCNAME[1]//bash-utils.console.}
                           prefix=${prefix^^}
                           ;;
   esac
 
-  lib.console._extract-rc $*
-  lib.console.to-stderr "${prefix}:: ${ExitStatus[msg]} !!!"
+  bash-utils.console._extract-rc $*
+  bash-utils.console.to-stderr "${prefix}:: ${ExitStatus[msg]} !!!"
   exit ${ExitStatus[rc]}
 }
 
@@ -153,7 +153,7 @@ lib.console.die() {
 #                     and used for the exit status; Note also, that escape
 #                     sequences contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.unknown() { lib.console.die $@ ; }
+bash-utils.console.unknown() { bash-utils.console.die $@ ; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.fatal()
@@ -165,7 +165,7 @@ lib.console.unknown() { lib.console.die $@ ; }
 #                     and used for the exit status; Note also, that escape
 #                     sequences contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.fatal() { lib.console.die $@ ; }
+bash-utils.console.fatal() { bash-utils.console.die $@ ; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.error()
@@ -180,7 +180,7 @@ lib.console.fatal() { lib.console.die $@ ; }
 #                     diagnostic message.
 #               $3  - depending on $1, an optional diagnostic message.
 # ------------------------------------------------------------------------------
-lib.console.error() { lib.console.die $@ ; }
+bash-utils.console.error() { bash-utils.console.die $@ ; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.warn()
@@ -188,7 +188,7 @@ lib.console.error() { lib.console.die $@ ; }
 # Takes:        $*  - the message to print to STDERR - note that escape sequence
 #                     contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.warn() { lib.console.to-stderr "WARN:: $@"; }
+bash-utils.console.warn() { bash-utils.console.to-stderr "WARN:: $@"; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.info()
@@ -196,7 +196,7 @@ lib.console.warn() { lib.console.to-stderr "WARN:: $@"; }
 # Takes:        $*  - the message to print to STDERR - note that escape sequence
 #                     contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.info() { lib.console.to-stderr "INFO:: $@"; }
+bash-utils.console.info() { bash-utils.console.to-stderr "INFO:: $@"; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.debug()
@@ -204,7 +204,7 @@ lib.console.info() { lib.console.to-stderr "INFO:: $@"; }
 # Takes:        $*  - the message to print to STDERR - note that escape sequence
 #                     contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.debug() { lib.console.to-stderr "DEBUG:: $@"; }
+bash-utils.console.debug() { bash-utils.console.to-stderr "DEBUG:: $@"; }
 
 # ------------------------------------------------------------------------------
 # Function:     console.trace()
@@ -212,12 +212,12 @@ lib.console.debug() { lib.console.to-stderr "DEBUG:: $@"; }
 # Takes:        $*  - the message to print to STDERR - note that escape sequence
 #                     contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.trace() { lib.console.to-stderr "TRACE:: $@"; }
+bash-utils.console.trace() { bash-utils.console.to-stderr "TRACE:: $@"; }
 
 . ${BASH_SOURCE%.sh}/help.sh
 
 # ------------------------------------------------------------------------------
-# Function:     lib.console.log-msg()
+# Function:     bash-utils.console.log-msg()
 # Description:  Routine provided to keep things DRY by replacing the requirement
 #               for repeated severity handling code in error reporting scripts.
 # Takes:        -s SEV  - specify the severity of the error to be reported as
@@ -234,13 +234,13 @@ lib.console.trace() { lib.console.to-stderr "TRACE:: $@"; }
 # Args:         $*  - the message to be reported to STDERR - note that escape
 #                     sequence(s) contained therein are honoured.
 # ------------------------------------------------------------------------------
-lib.console.log-msg() {
+bash-utils.console.log-msg() {
   local OPTARG OPTIND opt sev=t
   while getopts 's:' opt ; do
     case $opt in
       s)  sev=${OPTARG//[${!Severities[@]}]}
           case ${sev:-n} in
-            n) lib.console.fatal "Unknown severity: $sev" ;;
+            n) bash-utils.console.fatal "Unknown severity: $sev" ;;
           esac
           ;;
     esac
@@ -248,7 +248,7 @@ lib.console.log-msg() {
 
   shift $((OPTIND - 1))
 
-  eval lib.console.${Severities[$sev]} "$*"
+  eval bash-utils.console.${Severities[$sev]} "$*"
 }
 
 # vim: ai sw=2 sts=2 et
