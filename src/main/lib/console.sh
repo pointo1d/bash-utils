@@ -133,9 +133,9 @@ bash-utils.console.die() {
   local prefix=Died ; case ${FUNCNAME[1]} in
     bash-utils.console.error|\
     bash-utils.console.fatal|\
-    bash-utils.console.unknown)  prefix=${FUNCNAME[1]//bash-utils.console.}
-                          prefix=${prefix^^}
-                          ;;
+    bash-utils.console.unknown) prefix=${FUNCNAME[1]//bash-utils.console.}
+                                prefix=${prefix^^}
+                                ;;
   esac
 
   bash-utils.console._extract-rc $*

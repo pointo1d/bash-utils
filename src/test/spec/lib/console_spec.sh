@@ -45,14 +45,17 @@ Describe "Unit test suite for $LNAME)"
       invoke-it() { local fn=${FNNAME//.die}.$1 ; eval $fn "${1^^}" ; }
 
       When run invoke-it $1
+      declare type=${1^^} stderr
       if test $1 = unknown -o $1 = fatal -o $1 = error ; then
+        stderr="$type:: $type !!!"
         The status should not be success
       else
+        stderr="$type:: $type"
         The status should be success
       fi
 
       The stdout should equal ''
-      The stderr should include "${1^^}:: ${1^^}"
+      The stderr should include "$type"
     End
   End
 End
