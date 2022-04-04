@@ -264,8 +264,8 @@ bash-utils.source.announce.new-line() {
   # shellcheck disable=SC2046
   eval $(bash-utils.source.announce.get-attribs)
 
-  local first=$(type -t bash-utils.is-loaded >/dev/null 2>&1 && echo y)
-  local cond=${first:-}:${BASH_UTILS_SOURCE_VERBOSE:-}:${attribs[has_nested]:-}:${#IncludeStack[@]}
+  local first=$(type -t bash-utils.is-loaded >/dev/null 2>&1 || echo t)
+  local cond=$first:${BASH_UTILS_SOURCE_VERBOSE:-}:${attribs[has_nested]:-}:${#IncludeStack[@]}
 
   case $cond in
     t:*|\
