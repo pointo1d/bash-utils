@@ -105,7 +105,6 @@ case $(type -t source) in
             # shellcheck disable=SC2128
             PSELF="$(bash-utils.path.get-absolute "$BASH_SOURCE")"
             DSELF="${PSELF%/*}"
-            FirstPass=t
             declare -A attribs
             attribs=( [abs]='' [nm]='' [type]='' [has_nested]='' )
             IncludeStack=( "$(declare -p attribs)" )
@@ -114,7 +113,6 @@ case $(type -t source) in
             # shellcheck disable=SC2164,SC2086
             BASH_UTILS_SOURCE_SHORTCUTS["bash-utils"]="$(cd $d>/dev/null ; echo $PWD)"
             ;;
-  *)        FirstPass= ;;
 esac
 
 # ------------------------------------------------------------------------------
@@ -265,7 +263,9 @@ bash-utils.source.announce.new-line() {
   local -A attribs
   # shellcheck disable=SC2046
   eval $(bash-utils.source.announce.get-attribs)
-  local cond=${FirstPass:-}:${BASH_UTILS_SOURCE_VERBOSE:-}:${attribs[has_nested]:-}:${#IncludeStack[@]}
+
+  local first=$(type -t bash-utils.is-loaded >/dev/null 2>&1 && echo y)
+  local cond=${first:-}:${BASH_UTILS_SOURCE_VERBOSE:-}:${attribs[has_nested]:-}:${#IncludeStack[@]}
 
   case $cond in
     t:*|\
@@ -620,8 +620,19 @@ bash-utils.ifsource() { bash-utils.source "$@" ; }
 # ------------------------------------------------------------------------------
 source() { bash-utils.source "$@" ; }
 
-# Reset the first pass flag
-unset FirstPass
+# Reset the first pass flag - by defining the externally accessible function
+# ------------------------------------------------------------------------------
+# Function:     .()
+# Description:  Function providing an externally accessible function allowing
+#               dependant callers to determine if the core library has already
+#               been loaded i.e. the dependencies have already been met, since
+#               if this routine is called and it doesn't exist ...
+# Opts:         None
+# Args:         None
+# Returns:      0
+# Variables:    None
+# ------------------------------------------------------------------------------
+bash-utils.is-loaded() { : ; }
 
 # Ensure the loaded message is generated for this lib (if appropriate)
 # shellcheck disable=SC2119

@@ -16,15 +16,10 @@ Describe "ease of consumption"
     It 'be silent & without error'
       When run include-it
       The status should be success
-      The stdout should equal ''
-      The stderr should equal ''
     End
 
     It 'update the caller space'
       When call include-it
-      The status should be success
-      The stdout should equal ''
-      The stderr should equal ''
       The value "$(type -t bash-utils.source)" should equal 'function'
       The value "$(type -t source)" should equal 'function'
     End
@@ -42,9 +37,8 @@ Describe "ease of consumption"
         BASH_UTILS_SOURCE_RELOAD=${2:-}
         When run include-it
         The status should not be success
-        The stdout should equal ''
         The stderr should equal "\
-FATAL !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1)"
+FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
       End
     End
   End
@@ -63,15 +57,11 @@ FATAL !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1)"
         BASH_UTILS_SOURCE_VERBOSE=$1
         When call include-it
         The status should be success
-        The stdout should equal ''
-        The stderr should equal ''
       End
 
       Example "update the caller space - BASH_UTILS_SOURCE_VERBOSE=${1:-unset}"
         When call include-it
         The status should be success
-        The stdout should equal ''
-        The stderr should equal ''
         The value "$(type -t bash-utils.source)" should equal 'function'
       End
     End
@@ -104,21 +94,32 @@ Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done"
       Example "have no error - BASH_UTILS_SOURCE_VERBOSE=$1"
         BASH_UTILS_SOURCE_VERBOSE=$1
         When call include-it
-        The status should be success
         The stdout should equal "$(report_string $1 load)"
-        The stderr should equal ''
       End
 
       Example "update the caller space - BASH_UTILS_SOURCE_VERBOSE=$1"
         BASH_UTILS_SOURCE_VERBOSE=$1
         When call include-it
-        The status should be success
         The stdout should equal "$(report_string $1 load)"
-        The stderr should equal ''
         The value "$(type -t .)" should equal 'function'
         The value "$(type -t source)" should equal 'function'
       End
     End
+  End
+End
+
+Describe "core bash-utils library loaded"
+  It "dependant library load fails without bash-utils.is-loaded"
+    When run bash-utils.is-loaded
+    The status should not be success
+    The stderr should include 'bash-utils.is-loaded'
+  End
+
+  Include $PDIR/$LNAME
+
+  It "dependant library load fails with bash-utils.is-loaded"
+    When call bash-utils.is-loaded
+    The status should be success
   End
 End
 
@@ -132,9 +133,8 @@ Describe 'recursive inclusion avoidance'
   It 'direct inclusion attempts of self'
     When run run-it
     The status should not be success
-    The stdout should equal ''
     The stderr should equal "\
-FATAL !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1)"
+FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
   End
 
   It 'direct recursion'
@@ -145,9 +145,8 @@ FATAL !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1)"
 
     When run run-it
     The status should not be success
-    The stdout should equal ''
     The stderr should equal \
-      "FATAL !!! Recursive inclusion detected in '$Fname'"
+      "FATAL:: Recursive inclusion detected in '$Fname' !!!"
   End
 
   It 'indirect recursion'
@@ -161,9 +160,8 @@ FATAL !!! '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1)"
 
     When run run-it
     The status should not be success
-    The stdout should equal ''
     The stderr should equal \
-      "FATAL !!! Recursive inclusion detected in '$Fname'"
+      "FATAL:: Recursive inclusion detected in '$Fname' !!!"
   End
 End
 
@@ -174,8 +172,6 @@ Describe "non-extant file inclusion"
   It 'continues silently for non-verbose mode (BASH_UTILS_SOURCE_VERBOSE=0)'
       When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
       The status should be success
-      The stdout should equal ''
-      The stderr should equal ''
     End
 
     It "continues silently when non-verbose mode (BASH_UTILS_SOURCE_VERBOSE=1)"
@@ -184,7 +180,6 @@ Describe "non-extant file inclusion"
       When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
       The status should be success
       The stdout should equal ''
-      The stderr should equal ''
     End
   End
 
@@ -194,7 +189,6 @@ Describe "non-extant file inclusion"
     The status should be success
     The stdout should equal "\
 Source: '$SHELLSPEC_TMPBASE/non-exist.sh' - Starting ... Done (not found)"
-    The stderr should equal ''
   End
 End
 
@@ -208,8 +202,22 @@ Describe "non-standard file names"
   It "file name containing whitespace - '$Fnm'"
     When run run-it
     The status should be success
-    The stdout should equal ''
-    The stderr should equal ''
+  End
+End
+
+Describe "non-standard file locations"
+  Include $PDIR/$LNAME
+  
+  Base="$SHELLSPEC_TMPBASE/my-test"
+  Fnm="$Base.sh" ; Inc="$SHELLSPEC_TMPBASE/inc.sh" ; > $Inc
+
+  prep-it() { builtin echo ". ../inc.sh" > $Base ; }
+
+  BeforeEach 'prep-it'
+
+  It "non-standard relative file locations"
+    When run source $Base
+    The status should be success
   End
 End
 
@@ -222,8 +230,6 @@ Describe "one-liner multi-file inclusion"
   It ". <file1> <file2>"
     When run run-it
     The status should be success
-    The stdout should equal ''
-    The stderr should equal ''
   End
 End
 
@@ -231,8 +237,9 @@ Describe "multi-file inclusion in same namespace"
   Include $PDIR/$LNAME
 
   Top=$SHELLSPEC_TMPBASE/my-test
+
   prep-it() {
-    mkdir -p $Top
+    rm -fr $Top* ; mkdir -p $Top
     local nm ; for nm in 1 2 3 ; do > $Top/$nm.sh ; done
   }
 
@@ -241,8 +248,6 @@ Describe "multi-file inclusion in same namespace"
   Example ". $Top/*"
     When run . $Top/*
     The status should be success
-    The stdout should equal ''
-    The stderr should equal ''
   End
 End
 
@@ -255,7 +260,7 @@ Describe 'ease of access'
       local sub=$TDIR/sub
       local lower=$sub/lower.sh
 
-      mkdir -p $sub
+      rm -fr $sub* ; mkdir -p $sub
 
       builtin echo return > $lower
       builtin echo "
@@ -265,7 +270,7 @@ Describe 'ease of access'
       chmod +x $TOP
     }
 
-    BeforeEach 'prep-it'
+    BeforeEach prep-it
 
     Context 'varying verbosity levels'
       export BASH_UTILS_SOURCE_VERBOSE=
@@ -273,30 +278,24 @@ Describe 'ease of access'
       It "on the QT i.e. BASH_UTILS_SOURCE_VERBOSE=${BASH_UTILS_SOURCE_VERBOSE:-unset}"
         When run $TOP
         The status should be success
-        The stdout should equal ''
-        The stderr should equal ''
       End
 
       export BASH_UTILS_SOURCE_VERBOSE=1
 
       It "BASH_UTILS_SOURCE_VERBOSE=$BASH_UTILS_SOURCE_VERBOSE"
         When run $TOP
-        The status should be success
         The stdout should equal '
 .
 .'
-        The stderr should equal ''
       End
 
       export BASH_UTILS_SOURCE_VERBOSE=2
 
       It "BASH_UTILS_SOURCE_VERBOSE=$BASH_UTILS_SOURCE_VERBOSE"
         When run $TOP
-        The status should be success
         The stdout should equal "
 Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done
 Source: 'sub/lower.sh' ('$TDIR/sub/lower.sh') - Starting ... Done"
-        The stderr should equal ''
       End
 
       unset BASH_UTILS_SOURCE_VERBOSE
@@ -310,18 +309,14 @@ Source: 'sub/lower.sh' ('$TDIR/sub/lower.sh') - Starting ... Done"
 
     It "simple - '$Fnm'"
       When run . "$Fnm"
-      The output should equal ''
-      The stderr should equal ''
-      The status should equal 0
+      The status should be success
     End
 
     Fnm='!bash-utils/console/help.sh'
 
     It "complex - $Fnm"
       When run . "$Fnm"
-      The output should equal ''
-      The stderr should equal ''
-      The status should equal 0
+      The status should be success
     End
   End
 
@@ -330,18 +325,14 @@ Source: 'sub/lower.sh' ('$TDIR/sub/lower.sh') - Starting ... Done"
 
     It "simple - $Fnm"
       When run . "$Fnm"
-      The output should equal ''
-      The stderr should equal ''
-      The status should equal 0
+      The status should be success
     End
 
     Fnm=console/help.sh
 
     It "complex - $Fnm"
       When run . "$Fnm"
-      The output should equal ''
-      The stderr should equal ''
-      The status should equal 0
+      The status should be success
     End
   End   
 End
