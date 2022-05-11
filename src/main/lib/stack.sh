@@ -341,21 +341,44 @@ bash-utils.stack.top() {
 #               first then it also updates the current entry with the line
 #               number at which the new file is 'called` before add ing the new
 #               entry
-# Opts:         None
+# Opts:         -r  - reverse the direction of the walk i.e. tail to top,
+#                     default - top to tail
 # Args:         $1  - new element
 # Returns:      None (atm).
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.walk() {
+  local OPTARG OPTIND opt rev
+  while getopts 'r' opt ; do
+    case $opt in
+      r)  rev=t ;;
+    esac
+  done
+
+  shift $((OPTIND-1))
+
   eval $(bash-utils.stack.calling-context)
   bash-utils.stack.check-context "${context[context]}" "$@"
 
   bash-utils.stack.empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
+
   local -n stack=${context[inst]}
 
-  printf "%s\n" "${stack[@]}"
+  : ${#stack[@]}
+  local start=1 end=${#stack[@]} inc=1
+
+  case "${rev:-}" in
+    t)  local i ; i=$end end=$((start - 1)) ; start=$i inc=-1 ;;
+  esac
+
+  for (( i=start ; i != end ; i+=$inc )) ; do
+    : $i
+    printf "\n%s" "${stack[$((i-1))]}"
+  done
+
+  printf "\n"
 }
 
 # ------------------------------------------------------------------------------
@@ -393,8 +416,9 @@ bash-utils.stack.seek.compare-element() {
 #                         by elements on the returned list.
 # Returns:      An eval(1)able string which, when eval(1)led, results in an
 #               array, found, containing a list of of elements each of which
-#               satisfies the given/default comparison function.
-# Variables:    $IncludeStack
+#               satisfies the criteria implemented in/by the comparison
+#               function.
+# Variables:    <stack>
 # ------------------------------------------------------------------------------
 bash-utils.stack.seek() {
   local OPTARG OPTIND opt cmp=bash-utils.stack.seek.compare-element
@@ -425,16 +449,6 @@ bash-utils.stack.seek() {
     case "$($cmp "$*" "$el")" in n) continue ;; esac
     found+=( "$el" )
   done < <(${context[inst]}.walk)
-
-#  local found=() k="${1%=*}" v="${1#*=}"
-#
-#  local e ; for e in "${stack[@]}" ; do
-#      eval "$e"
-#      case "${attribs[initial]:-}" in
-#        t)  break ;;
-#        *)  case "${attribs["$k"]}" in "$v") found+=( "$e" ) ;; esac ;;
-#      esac
-#  done
 
   declare -p found
 }

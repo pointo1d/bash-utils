@@ -263,6 +263,11 @@ Describe 'Pre-initialising creation'
         The stdout should equal 'arg 3'
       End
 
+      It "$STACK_NM.peek 1"
+        When call $STACK_NM.peek 1
+        The stdout should equal arg2
+      End
+
       It "$STACK_NM.update top"
         When call $STACK_NM.update top
         The value "$($STACK_NM.top)" should equal top
@@ -276,6 +281,30 @@ Describe 'Pre-initialising creation'
       It "$STACK_NM.seek 'arg 1' - returns one element"
         When call $STACK_NM.seek 'arg 1'
         The stdout should equal 'declare -a found=([0]="arg 1")'
+      End
+
+      tmp=$SHELLSPEC_TMPBASE/walk
+      walk-it() { $STACK_NM.walk > $tmp ; }
+
+      It "$STACK_NM.walk"
+        When call walk-it
+        %logger "$(wc -l $tmp) - $(< $tmp)"
+        The value "$(< $tmp)" should include "
+arg 3
+arg2
+arg 1
+arg0"
+      End
+
+      walk-it() { $STACK_NM.walk -r > $tmp ; }
+
+      It "$STACK_NM.walk -r"
+        When call walk-it
+        The value "$(< $tmp)" should include "
+arg0
+arg 1
+arg2
+arg 3"
       End
     End
   End
