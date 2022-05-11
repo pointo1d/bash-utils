@@ -19,6 +19,7 @@ bash-utils
   * [`lib/include`](#libinclude)
   * [`lib/narg`](#libnarg)
   * [`lib/path`](#libpath)
+  * [`lib/stack`](#libstack)
   * [`lib/tmp-path`](#libtmp-path)
   * [`lib/trap-handler`](#libtrap-handler)
   * [`lib/xtrace`](#libxtrace)
@@ -43,6 +44,7 @@ This repo constitutes a library containing, as near as humanly possible, pure ba
   - Selective enabling &/or disabling on a file &/or function basis.
   - Auto-redirection &/or auto-logging.
 - Temporary file manipulation i.e. creation and subsequent removal.
+- A pure bash(1) stack implementation.
 - Console related routines - including, but again not limited to,...
   - Introspective help generation.
   - ANSI code abstraction.
@@ -73,10 +75,12 @@ The primary interface to this repository is provided by the `enrol-me.sh` script
     - [`lib/repo-enrol`](#libenrol) - general purpose repository enrolment routine.
     - [`lib/narg`](#libnarg) - function named argument routine.
     - [`lib/path`](#libpath) - general path related tools & utils.
+    - [`lib/stack`](#libstack) - pure bash(1) stack implementation.
     - [`lib/include`](#libinclude) - file inclusion routines including conditional & non-recursive file inclusion prevention routines.
     - [`lib/tmppath`](#libtmp-path) - temporary file manipulation & maintenance tools & utils.
     - [`lib/trap`](#libtrap-handler) - trap(1) manipulation & maintenance tools & utils.
     - [`lib/xtrace`](#libxtrace) - xtrace manipulation & maintenance tools & utils.
+  - [`md-from-sh`](src/main/bin/md-from-sh.sh) - markdown from well formed & understoof in-line bash script comments.
   - [`git`](src/main/git/README.md) - git hook/webhook framework.
   - [`cuba`](src/main/cuba/README.md) - prototype test framework implementing the [Cucumber](https://cucumber.io) language in pure bash(1) and utilising, not entirley unsurprisingly :-), the aforementioned library routines.
   - [`test`](src/main/test/README.md) - simple pure bash(1) test framework.
@@ -102,6 +106,8 @@ The primary interface to this repository is provided by the `enrol-me.sh` script
 ## `lib/narg`
 
 ## `lib/path`
+
+## `lib/stack`
 
 ## `lib/tmp-path`
 
