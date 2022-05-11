@@ -336,16 +336,81 @@ bash-utils.stack.top() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.seek()
-# Description:  Pops the top element(s) off the include stack - assumes that if
-#               if the element(s) to be popped are of interest to the caller,
-#               then the caller has already called bash-utils.source.top() to
-#               inspect/retrieve them.
-# Takes:        $1  - optional number of elements to pop, default - 1
-# Returns:      $IncludeStack updated for the given nm & path
+# Function:     bash-utils.stack.walk()
+# Description:  Function to create a new entry on the stack - if it's not the
+#               first then it also updates the current entry with the line
+#               number at which the new file is 'called` before add ing the new
+#               entry
+# Opts:         None
+# Args:         $1  - new element
+# Returns:      None (atm).
+# Variables:    $IncludeStack
+# ------------------------------------------------------------------------------
+bash-utils.stack.walk() {
+  eval $(bash-utils.stack.calling-context)
+  bash-utils.stack.check-context "${context[context]}" "$@"
+
+  bash-utils.stack.empty-behaviour ${context[inst]}
+
+  case $(${context[inst]}.is-empty) in y) return ;; esac
+  local -n stack=${context[inst]}
+
+  printf "%s\n" "${stack[@]}"
+}
+
+# ------------------------------------------------------------------------------
+# Function:     bash-utils.stack.seek.compare-element()
+# Description:  Element comparison method used as the default by
+#               the bash-utils.stack.seek() method (see below) - implements a
+#               simple string comparison.
+#               default/given comparison function.
+# Opts:         None.
+# Args:         $1  - The search criteria i.e. the condition to be satisfied
+#                     by elements on the returned list.
+#               $2  - a stack element (as a string).
+# Returns:      On STDOUT, 'y' iff the criteria is satisfied, 'n' otherwise.
+# Variables:    None.
+# ------------------------------------------------------------------------------
+bash-utils.stack.seek.compare-element() {
+  local criteria="$1" element="$2"
+  local ret ; case "$criteria" in "$element") ret=y ;; esac
+  builtin echo ${ret:-n}
+}
+
+# ------------------------------------------------------------------------------
+# Function:     bash-utils.stack.seek()
+# Description:  "Instance" method to seek out all stack elements satisfying the
+#               default/given comparison function.
+# Opts:         -c STR  - the name of an alternative comparison function,
+#                         default - bash-utils.stack.seek.compare-element. The
+#                         function is called with 2 args
+#                         1 - a stack element as a string.
+#                         2 - the search criteria (also as a string).
+#                         It must return [yn] on STDOUT depending on whether the
+#                         element satisfies the search criteria (as implemented
+#                         in the function).
+# Args:         $*      - The search criteria i.e. the condition to be satisfied
+#                         by elements on the returned list.
+# Returns:      An eval(1)able string which, when eval(1)led, results in an
+#               array, found, containing a list of of elements each of which
+#               satisfies the given/default comparison function.
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.seek() {
+  local OPTARG OPTIND opt cmp=bash-utils.stack.seek.compare-element
+  while getopts 'c:' opt ; do
+    case $opt in
+      c)  cmp=$OPTARG ;;
+    esac
+  done
+
+  shift $((OPTIND-1))
+
+  case "$(type -t $cmp)" in
+    function) : ;;
+    *)        bash-utils.stack.fatal-error "function not found: $cmp" ;;
+  esac
+
   eval $(bash-utils.stack.calling-context)
   bash-utils.stack.check-context "${context[context]}" "$@"
 
@@ -355,15 +420,21 @@ bash-utils.stack.seek() {
 
   local -n stack=${context[inst]}
 
-  local found=() k="${1%=*}" v="${1#*=}"
+  local el found=() ; while read el ; do
+    : $el
+    case "$($cmp "$*" "$el")" in n) continue ;; esac
+    found+=( "$el" )
+  done < <(${context[inst]}.walk)
 
-  local e ; for e in "${stack[@]}" ; do
-      eval "$e"
-      case "${attribs[initial]:-}" in
-        t)  break ;;
-        *)  case "${attribs["$k"]}" in "$v") found+=( "$e" ) ;; esac ;;
-      esac
-  done
+#  local found=() k="${1%=*}" v="${1#*=}"
+#
+#  local e ; for e in "${stack[@]}" ; do
+#      eval "$e"
+#      case "${attribs[initial]:-}" in
+#        t)  break ;;
+#        *)  case "${attribs["$k"]}" in "$v") found+=( "$e" ) ;; esac ;;
+#      esac
+#  done
 
   declare -p found
 }
@@ -385,21 +456,6 @@ bash-utils.stack.is-empty() {
   local ret ; case $(${context[inst]}.depth) in 0) ret=y ;; esac
 
   builtin echo ${ret:-n}
-}
-
-# ------------------------------------------------------------------------------
-# Function:     bash-utils.stack.walk()
-# Description:  Function to create a new entry on the stack - if it's not the
-#               first then it also updates the current entry with the line
-#               number at which the new file is 'called` before add ing the new
-#               entry
-# Opts:         None
-# Args:         $1  - new element
-# Returns:      None (atm).
-# Variables:    $IncludeStack
-# ------------------------------------------------------------------------------
-bash-utils.stack.walk() {
-  : 
 }
 
 # ------------------------------------------------------------------------------
@@ -460,6 +516,7 @@ bash-utils.stack.new() {
   done
 
   # Finally, initialise the stack if appropriate
+  : $#
   local e ; for e ; do $name.push "$e" ; done
 }
 

@@ -222,7 +222,7 @@ Describe 'Pre-initialising creation'
       The status should be success
     End
 
-    Describe 'successful updates'
+    Describe 'successful updates - simple args'
       prep-it() {
         $FuncName $STACK_NM $Args
       }
@@ -242,6 +242,40 @@ Describe 'Pre-initialising creation'
       It "$STACK_NM.update top"
         When call $STACK_NM.update top
         The value "$($STACK_NM.top)" should equal top
+      End
+    End
+
+    Describe ' updates - composite args'
+      prep-it() {
+        $FuncName $STACK_NM arg0 "arg 1" arg2 "arg 3"
+      }
+
+      BeforeEach 'prep-it'
+
+
+      It "$STACK_NM.depth"
+        When call $STACK_NM.depth
+        The stdout should equal 4
+      End
+
+      It "$STACK_NM.top"
+        When call $STACK_NM.top
+        The stdout should equal 'arg 3'
+      End
+
+      It "$STACK_NM.update top"
+        When call $STACK_NM.update top
+        The value "$($STACK_NM.top)" should equal top
+      End
+
+      It "$STACK_NM.seek 'arrg 1' - returns empty list"
+        When call $STACK_NM.seek 'arrg 1'
+        The stdout should equal 'declare -a found=()'
+      End
+
+      It "$STACK_NM.seek 'arg 1' - returns one element"
+        When call $STACK_NM.seek 'arg 1'
+        The stdout should equal 'declare -a found=([0]="arg 1")'
       End
     End
   End
