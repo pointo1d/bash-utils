@@ -80,7 +80,7 @@ The primary interface to this repository is provided by the `enrol-me.sh` script
     - [`lib/tmppath`](#libtmp-path) - temporary file manipulation & maintenance tools & utils.
     - [`lib/trap`](#libtrap-handler) - trap(1) manipulation & maintenance tools & utils.
     - [`lib/xtrace`](#libxtrace) - xtrace manipulation & maintenance tools & utils.
-  - [`md-from-sh`](src/main/bin/md-from-sh.sh) - markdown from well formed & understoof in-line bash script comments.
+  - [`bin/md-from-sh`](src/main/bin/md-from-sh.sh) - markdown from well formed & understoof in-line bash script comments.
   - [`git`](src/main/git/README.md) - git hook/webhook framework.
   - [`cuba`](src/main/cuba/README.md) - prototype test framework implementing the [Cucumber](https://cucumber.io) language in pure bash(1) and utilising, not entirley unsurprisingly :-), the aforementioned library routines.
   - [`test`](src/main/test/README.md) - simple pure bash(1) test framework.
