@@ -1,28 +1,23 @@
 #!/usr/bin/env bash
 # vim: et ai sw=2 sts=2
 ################################################################################
-# File:         source.sh
-# Description:  Pure bash(1) script to provide a recursive inclusion avoiding
-#               file inclusion capability whilst providing a simpler interface
-#               such that the caller need only know a directory under which the
-#               sourced file exists, so for example, this file may be included
-#               merely as `. source` or even the help sub-library of console
-#               may be included as `. console/help` - in these casaes this is
-#               because the directory containing these elements is automgically
-#               included in the PATH for free.
-# Doc link:     ../../../docs/source.md
-# Env vars:     $BASH_UTILS_STACK_ON_EMPTY  -
-#                 specify the behaviour if/when top()/pop() called on an empty
-#                 stack.Has one of a number of values as follows...
-#                 * fatal             - a fatal error is thrown
-#                 * warn              - a warning is thrown.
-# Notes:
+# File:         stack.sh
+# Description:  This is a pure bash(1) implementation of a general purpose
+#               stack ... implementing, as it does, the standard + a couple of
+#               additional operations as bash(1) functions.
+# Notes:        Functions whose names use the bash-utils.stack.__* prefix
+#               signify private "functions" and thus, altho' available to the
+#               consumer, they aren't part of the interface.
+# ------------------------------------------------------------------------------
+# Author:       D. C. Pointon FIAP MBCS
+# Date:         May 2022
 ################################################################################
 
+# Define a mapping of the methods against calling context
 declare -A Methods=(
   [new]=class
   [exists]=class
-  [fatal-error]=class
+  [__fatal]=class
   [update]=inst
   [clone]=inst
   [push]=inst
@@ -39,65 +34,72 @@ declare -A Methods=(
 )
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.fatal-error()
 # Description:  .
 # Takes:        $1  - lib name ( as supplied in the call).
 #               $2  - fully pathed lib name
 # Returns:      Never.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-bash-utils.stack.fatal-error() {
+bash-utils.stack.__fatal() {
   local rc=1 ; case i${1//[0-9]} in i) rc=$1 ; shift ;; esac
   builtin echo -e "$*" >&2
   exit $rc
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.fatal-warn()
 # Description:  .
 # Takes:        $1  - lib name ( as supplied in the call).
 #               $2  - fully pathed lib name
 # Returns:      Never.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-bash-utils.stack.fatal-warn() { builtin echo -e "$*" >&2 ; }
+bash-utils.stack.__warn() { builtin echo -e "$*" >&2 ; }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack._get_inst_name()
 # Description:  .
 # Takes:        $1  - lib name ( as supplied in the call).
 #               $2  - fully pathed lib name
 # Returns:      Never.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-bash-utils.stack.context-error() {
-  bash-utils.stack.fatal-error "invalid context: $1 method on $2"
-}
-
-# ------------------------------------------------------------------------------
-# Function:     source.lib-stack._get_inst_name()
-# Description:  .
-# Takes:        $1  - lib name ( as supplied in the call).
-#               $2  - fully pathed lib name
-# Returns:      Never.
-# Variables:    None.
-# ------------------------------------------------------------------------------
-bash-utils.stack.check-context() {
+bash-utils.stack.__check-context() {
   local actual=${1:?'No actual context'} ; shift
   local caller=( $(caller 0) ) ; local exp=${Methods[${caller[1]##*.}]}
   case $exp in
     $actual*) case $exp:::$# in
-                class:::0)  bash-utils.stack.fatal-error 'no stack name' ;;
+                class:::0)  bash-utils.stack.__fatal 'no stack name' ;;
               esac
               ;;
-    *)        bash-utils.stack.fatal-error \
+    *)        bash-utils.stack.__fatal \
                 "invalid context: $actual method on $exp"
               ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.check-existence()
+# Description:  Function to create a new entry on the stack - if it's not the
+#               first then it also updates the current entry with the line
+#               number at which the new file is 'called` before add ing the new
+#               entry
+# Opts:         None
+# Args:         $1  - name for the new stack
+#               $2  - optional structure definition
+# Returns:      None (atm).
+# Variables:    $IncludeStack
+# ------------------------------------------------------------------------------
+bash-utils.stack.exists() {
+  local nm="${1:?'No stack name !!'}" found
+  found="$(declare -p $nm 2>&1):::$(type -t $nm)"
+  case "$found" in
+    *:::function|\
+    declare*$nm=*:::*)  found=y ;;
+    *)                  found=n ;;
+  esac
+
+  builtin echo $found
+}
+
+# ------------------------------------------------------------------------------
 # Description:  Routine to determine if the given stack exists and respond with 
 #               a fatal error appropriately.
 # Takes:        $1  - stack name.
@@ -106,7 +108,7 @@ bash-utils.stack.check-context() {
 # Returns:      Never.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-bash-utils.stack.check-existence() {
+bash-utils.stack.__check-existence() {
   local caller=( $(caller 0) )
   local cond=$(bash-utils.stack.exists $1):::${2:-}
   local msg ; case $cond in
@@ -115,18 +117,17 @@ bash-utils.stack.check-existence() {
     *)      return ;;
   esac
 
-  bash-utils.stack.fatal-error "${caller[1]##*.}: $msg: $1"
+  bash-utils.stack.__fatal "${caller[1]##*.}: $msg: $1"
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce._call_context_checker()
 # Description:  .
 # Opts:         None.
 # Args:         $1  - actual context
 # Returns:      Never.
 # Variables:    None.
 # ------------------------------------------------------------------------------
-bash-utils.stack.calling-context() {
+bash-utils.stack.__calling-context() {
   local caller=( $(caller 0) ) caller_1=( $(caller 1) )
   : ${caller[@]}, ${caller_1[@]}
   local -A context=( [inst]= [method]=${caller[1]##*.} [context]= )
@@ -144,30 +145,7 @@ bash-utils.stack.calling-context() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     bash-utils.stack.exists()
-# Description:  Function to create a new entry on the stack - if it's not the
-#               first then it also updates the current entry with the line
-#               number at which the new file is 'called` before add ing the new
-#               entry
-# Opts:         None
-# Args:         $1  - name for the new stack
-#               $2  - optional structure definition
-# Returns:      None (atm).
-# Variables:    $IncludeStack
-# ------------------------------------------------------------------------------
-bash-utils.stack.exists() {
-  local nm="${1:?'No stack name !!'}" found
-  found="$(declare -p $nm 2>&1):::$(type -t $nm)"
-  case "$found" in
-    *:::function|\
-    declare*$nm=*:::*)  found=y ;;
-    *)                found=n ;;
-  esac
-  builtin echo $found
-}
-
-# ------------------------------------------------------------------------------
-# Function:     source.lib-stack.empty-behaviour()
+# Function:     bash-utils.stack.__empty-behaviour()
 # Description:  Called first for any sourced file, this routine records the
 #               name, absolute path and "type" for the given library name &/or
 #               path on the included stack.
@@ -175,19 +153,19 @@ bash-utils.stack.exists() {
 # Returns:      $IncludeStack updated for the given nm & path
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
-bash-utils.stack.empty-behaviour() {
+bash-utils.stack.__empty-behaviour() {
 local inst=${1:?'No instance'} caller=( $(caller 0) )
 
   case $($inst.is-empty) in
     y)  local msg="${caller[1]##*.}: cannot call on an empty stack ($inst)" 
-        local reporter=${BASH_SOURCE_STACK_EMPTY_STACK:-warn}
-        bash-utils.stack.fatal-${reporter/fatal/error} "$msg"
+        local reporter=${BASH_SOURCE_STACK_EMPTY_BEHAVIOUR:-warn}
+        bash-utils.stack.__$reporter "$msg"
         ;;
   esac
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.update()
+# Function:     bash-utils.stack.update()
 # Description:  "instance" method to update the value of the given/default
 #               element in-situ.
 # Opts:         -n INT  - specify the index of the stack element to be
@@ -202,7 +180,7 @@ bash-utils.stack.update() {
     case $opt in
       n)  case "${idx//[0-9]}" in
             i)  idx=$OPTARG ;;
-            *)  bash-utils.stack.fatal-error "Invalid integer: $OPTARG" ;;
+            *)  bash-utils.stack.__fatal "Invalid integer: $OPTARG" ;;
           esac
           ;;
     esac
@@ -210,23 +188,23 @@ bash-utils.stack.update() {
 
   shift $((OPTIND-1))
 
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
   local depth=$(${context[inst]}.depth)
   case $((depth - idx)) in
-    -*) bash-utils.stack.fatal-error "Index out of range ($depth): $idx" ;;
+    -*) bash-utils.stack.__fatal "Index out of range ($depth): $idx" ;;
   esac
 
   local -n stack=${context[inst]} ; stack[$idx]="$1"
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.push()
+# Function:     bash-utils.stack.push()
 # Description:  Called first for any sourced file, this routine records the
 #               given attribs for the lib and then saves them on the top of the
 #               included stack.
@@ -236,11 +214,11 @@ bash-utils.stack.update() {
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.push() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
   case $# in
-    0)  bash-utils.stack.fatal-warn "push: nothing to push"
+    0)  bash-utils.stack.__warn "push: nothing to push"
         return
         ;;
   esac
@@ -259,10 +237,10 @@ bash-utils.stack.push() {
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.peek() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
@@ -271,22 +249,22 @@ bash-utils.stack.peek() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.pop()
+# Function:     bash-utils.stack.pop()
 # Description:  Pops the top element off the include stack - assuming that...
 #               * the stack isn't empty - the caller is expected to assert this
-#                 via prior call to source.lib-stack.load.announce.is-empty().
+#                 via prior call to bash-utils.stack.is-empty().
 #               * if the element to be popped is of interest to the caller, then
-#                 the caller has already called bash-utils.source.top() to
+#                 the caller has already called bash-utils.bash-utils.top() to
 #                 inspect/retrieve it.
 # Takes:        $1  - optional number of elements to pop, default - 1
 # Returns:      $IncludeStack updated for the given nm & path
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.pop() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
@@ -296,18 +274,18 @@ bash-utils.stack.pop() {
 
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.pop-attribs()
+# Function:     bash-utils.stack.depth()
 # Description:  Pops the top element(s) off the include stack - assumes that if
 #               if the element(s) to be popped are of interest to the caller,
-#               then the caller has already called bash-utils.source.top() to
+#               then the caller has already called bash-utils.bash-utils.top() to
 #               inspect/retrieve them.
 # Takes:        $1  - optional number of elements to pop, default - 1
 # Returns:      $IncludeStack updated for the given nm & path
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.depth() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
   local -n stack=${context[inst]}
   : $(declare -p context ${context[inst]} MyStack)
@@ -315,20 +293,20 @@ bash-utils.stack.depth() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.pop-attribs()
+# Function:     bash-utils.stack.top()
 # Description:  Pops the top element(s) off the include stack - assumes that if
 #               if the element(s) to be popped are of interest to the caller,
-#               then the caller has already called bash-utils.source.top() to
+#               then the caller has already called bash-utils.bash-utils.top() to
 #               inspect/retrieve them.
 # Takes:        $1  - optional number of elements to pop, default - 1
 # Returns:      $IncludeStack updated for the given nm & path
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.top() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
@@ -357,10 +335,10 @@ bash-utils.stack.walk() {
 
   shift $((OPTIND-1))
 
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
@@ -418,7 +396,7 @@ bash-utils.stack.seek.compare-element() {
 #               array, found, containing a list of of elements each of which
 #               satisfies the criteria implemented in/by the comparison
 #               function.
-# Variables:    <stack>
+# Variables:    $stack
 # ------------------------------------------------------------------------------
 bash-utils.stack.seek() {
   local OPTARG OPTIND opt cmp=bash-utils.stack.seek.compare-element
@@ -432,13 +410,13 @@ bash-utils.stack.seek() {
 
   case "$(type -t $cmp)" in
     function) : ;;
-    *)        bash-utils.stack.fatal-error "function not found: $cmp" ;;
+    *)        bash-utils.stack.__fatal "function not found: $cmp" ;;
   esac
 
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
-  bash-utils.stack.empty-behaviour ${context[inst]}
+  bash-utils.stack.__empty-behaviour ${context[inst]}
 
   case $(${context[inst]}.is-empty) in y) return ;; esac
 
@@ -454,18 +432,19 @@ bash-utils.stack.seek() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     source.lib-stack.load.announce.pop-attribs()
+# Function:     bash-utils.stack.is-empty()
 # Description:  Pops the top element(s) off the include stack - assumes that if
 #               if the element(s) to be popped are of interest to the caller,
-#               then the caller has already called bash-utils.source.top() to
-#               inspect/retrieve them.
-# Takes:        $1  - optional number of elements to pop, default - 1
-# Returns:      $IncludeStack updated for the given nm & path
-# Variables:    $IncludeStack
+#               then the caller has already called bash-utils.bash-utils.top()
+#               to inspect/retrieve them.
+# Opts:         None.
+# Args:         None.
+# Returns:      On STDOUT - 'y' iff the instance is empty, 'n' otherwise.
+# Variables:    $stack
 # ------------------------------------------------------------------------------
 bash-utils.stack.is-empty() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
 
   local ret ; case $(${context[inst]}.depth) in 0) ret=y ;; esac
 
@@ -484,36 +463,36 @@ bash-utils.stack.is-empty() {
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.clone() {
-  case $# in 0) bash-utils.stack.fatal-error 'clone: no stack name' ;; esac
+  case $# in 0) bash-utils.stack.__fatal 'clone: no stack name' ;; esac
 
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
   
-  bash-utils.stack.check-existence "${1:-}" y
+  bash-utils.stack.__check-existence "${1:-}" y
 
   bash-utils.stack.new "$1"
 }
 
 # ------------------------------------------------------------------------------
 # Function:     bash-utils.stack.new()
-# Description:  Function to create a new entry on the stack - if it's not the
-#               first then it also updates the current entry with the line
-#               number at which the new file is 'called` before add ing the new
-#               entry
+# Description  "Constructor" function - creates...
+#               1.  a new stack with the given name.
+#               2.  A set of "instance" methods whose names are all of the form
+#                   <stack name>.<method>
 # Opts:         None
 # Args:         $1  - name of the new stack.
 #               $*  - optional initial stack contents - one element per arg 
 # Returns:      None (atm).
-# Variables:    $IncludeStack
+# Variables:    $stack name
 # ------------------------------------------------------------------------------
 bash-utils.stack.new() {
   local caller=( $(caller 0) )
   case ${caller[1]} in
     *.clone)  : ;;
-    *)        eval $(bash-utils.stack.calling-context)
-              bash-utils.stack.check-context "${context[context]}" "$@"
+    *)        eval $(bash-utils.stack.__calling-context)
+              bash-utils.stack.__check-context "${context[context]}" "$@"
 
-              bash-utils.stack.check-existence "$1" y
+              bash-utils.stack.__check-existence "$1" y
               ;;
   esac
 
@@ -535,7 +514,7 @@ bash-utils.stack.new() {
 }
 
 # ------------------------------------------------------------------------------
-# Function:     bash-utils.stack.new()
+# Function:     bash-utils.stack.is-equal()
 # Description:  Function to create a new entry on the stack - if it's not the
 #               first then it also updates the current entry with the line
 #               number at which the new file is 'called` before add ing the new
@@ -547,12 +526,12 @@ bash-utils.stack.new() {
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.is-equal() {
-  case $# in 0) bash-utils.stack.fatal-error 'clone: no stack name' ;; esac
+  case $# in 0) bash-utils.stack.__fatal 'clone: no stack name' ;; esac
 
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
   
-  bash-utils.stack.check-existence "${1:-}"
+  bash-utils.stack.__check-existence "${1:-}"
 
   # Can't be equal if they're different lengths/depths
   case $(${context[inst]}.depth) in
@@ -565,10 +544,9 @@ bash-utils.stack.is-equal() {
 
 # ------------------------------------------------------------------------------
 # Function:     bash-utils.stack.delete()
-# Description:  Function to create a new entry on the stack - if it's not the
-#               first then it also updates the current entry with the line
-#               number at which the new file is 'called` before add ing the new
-#               entry
+# Description:  Class & instance sensitive function to delete either a stack or
+#               a stack - deletes the given stack when called on the class,
+#               merely deleting the given element(s) when called on an instance.
 # Opts:         None
 # Args:         $1  - name of the new stack.
 #               $2  - optional end of stack marker string.
@@ -576,10 +554,10 @@ bash-utils.stack.is-equal() {
 # Variables:    $IncludeStack
 # ------------------------------------------------------------------------------
 bash-utils.stack.delete() {
-  eval $(bash-utils.stack.calling-context)
-  bash-utils.stack.check-context "${context[context]}" "$@"
+  eval $(bash-utils.stack.__calling-context)
+  bash-utils.stack.__check-context "${context[context]}" "$@"
   
-  bash-utils.stack.check-existence "${1:-}"
+  bash-utils.stack.__check-existence "${1:-}"
 
   local inst=${context[inst]}
   unset $inst

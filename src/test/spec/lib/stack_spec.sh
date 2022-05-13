@@ -14,11 +14,10 @@ declare -A MethodDefns=(
   [seek]="inst "
   [depth]="inst "
   [is-empty]="inst "
-  [fatal-error]="class "
   [clone]="inst"
   [delete]="inst"
 )
-%const CLASS_METHODS: "new exists fatal-error"
+%const CLASS_METHODS: "new exists"
 %const INST_METHODS: "push pop top peek walk seek depth is-empty clone delete"
 
 Context 'pre-load & load'
@@ -116,8 +115,8 @@ Context 'New/empty stack operations'
           fatal warn
         End
           
-        It "$STACK_NM.$1 - BASH_SOURCE_STACK_EMPTY_STACK=$2()"
-          BASH_SOURCE_STACK_EMPTY_STACK=$2
+        It "$STACK_NM.$1 - BASH_SOURCE_STACK_EMPTY_BEHAVIOUR=$2()"
+          BASH_SOURCE_STACK_EMPTY_BEHAVIOUR=$2
 
           test $1 = seek && args="nm=val"
 
