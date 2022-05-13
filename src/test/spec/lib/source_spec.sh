@@ -2,6 +2,19 @@ FNNAME=bash-utils.source LNAME=${FNNAME#*.}.sh PDIR=src/main/lib
 LDIR=$(cd $PDIR >/dev/null && pwd)
 
 Describe "ease of consumption"
+  FName=$SHELLSPEC_TMPBASE/my-test.sh
+  prep-it() {
+    builtin echo "
+#! /usr/bin/env
+declare flag=\${1:-} ; shift
+. $PDIR/$LNAME
+case \${flag:-n} in n) ;; *) . $PDIR/$LNAME ;; esac
+" > $FName
+    chmod +x $FName
+  }
+
+  BeforeEach prep-it
+
   include-it() {
     local lib=$PDIR/$LNAME flag=${1:+y} ; case $flag in y) shift ;; esac
 
@@ -14,7 +27,7 @@ Describe "ease of consumption"
 
   Context  'can be sourced - default behaviours - should '
     It 'be silent & without error'
-      When run include-it
+      When run $FName
       The status should be success
     End
 
@@ -33,19 +46,19 @@ Describe "ease of consumption"
         enabled   t
       End
 
-      Example "when $1 - \$BASH_UTILS_SOURCE_RELOAD=${2:-}"
+      Example "when reload is $1 (\$BASH_UTILS_SOURCE_RELOAD=${2:-})"
         BASH_UTILS_SOURCE_RELOAD=${2:-}
-        When run include-it
+        When run $FName t
         The status should not be success
-        The stderr should equal "\
-FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
+        The stderr should equal "
+$FName: line 5: $PDIR/$LNAME ($LDIR/$LNAME) cannot load itself, use builtin(1)"
       End
     End
   End
 
   Context \
     'can be sourced - default behaviours persist with non-default verbosity - it should'
-    Describe 'BASH_UTILS_SOURCE_VERBOSE set to empty/non-usable/off value)'
+    Describe 'BASH_UTILS_SOURCE_ENH_REPORT set to empty/non-usable/off value)'
       Parameters
         0
         ''
@@ -53,20 +66,20 @@ FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
         wibble
       End
 
-      Example "silent & without error BASH_UTILS_SOURCE_VERBOSE=${1:-unset}"
-        BASH_UTILS_SOURCE_VERBOSE=$1
+      Example "silent & without error BASH_UTILS_SOURCE_ENH_REPORT=${1:-unset}"
+        BASH_UTILS_SOURCE_ENH_REPORT=$1
         When call include-it
         The status should be success
       End
 
-      Example "update the caller space - BASH_UTILS_SOURCE_VERBOSE=${1:-unset}"
+      Example "update the caller space - BASH_UTILS_SOURCE_ENH_REPORT=${1:-unset}"
         When call include-it
         The status should be success
         The value "$(type -t bash-utils.source)" should equal 'function'
       End
     End
 
-    Describe 'be verbose (BASH_UTILS_SOURCE_VERBOSE set - to usable value) - it should'
+    Describe 'be verbose (BASH_UTILS_SOURCE_ENH_REPORT set - to usable value) - it should'
       Parameters
         1
         2
@@ -84,21 +97,21 @@ FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
 .
 .'                 ;;
           load:2) exp="
-Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done"
+Source: $PDIR/$LNAME ($LDIR/$LNAME) - Starting ... Done"
                 ;;
         esac
 
         builtin echo "$exp"
       }
 
-      Example "have no error - BASH_UTILS_SOURCE_VERBOSE=$1"
-        BASH_UTILS_SOURCE_VERBOSE=$1
-        When call include-it
+      Example "have no error - BASH_UTILS_SOURCE_ENH_REPORT=$1"
+        export BASH_UTILS_SOURCE_ENH_REPORT=$1
+        When call $FName
         The stdout should equal "$(report_string $1 load)"
       End
 
-      Example "update the caller space - BASH_UTILS_SOURCE_VERBOSE=$1"
-        BASH_UTILS_SOURCE_VERBOSE=$1
+      Example "update the caller space - BASH_UTILS_SOURCE_ENH_REPORT=$1"
+        BASH_UTILS_SOURCE_ENH_REPORT=$1
         When call include-it
         The stdout should equal "$(report_string $1 load)"
         The value "$(type -t .)" should equal 'function'
@@ -124,71 +137,105 @@ Describe "core bash-utils library loaded"
 End
 
 Describe 'recursive inclusion avoidance'
-  Include $PDIR/$LNAME
+  Context "direct"
+    Include $PDIR/$LNAME
+
+    It "direct inclusion attempts of self i.e. $PDIR/$LNAME"
+      When run source $PDIR/$LNAME
+      The status should not be success
+      The stderr should match pattern "
+*evaluation.sh: line *: $PDIR/$LNAME ($LDIR/$LNAME) cannot load itself, use builtin(1)"
+    End
+  End
 
   Fname=$SHELLSPEC_TMPBASE/my-test.sh
 
-  run-it() { . $PDIR/$LNAME ; }
+  Describe 'direct recursion - not self'
+    prep-it() {
+      builtin echo "
+#! /usr/bin/env
+. $PDIR/$LNAME
+. $Fname
+" >$Fname
+      chmod +x $Fname
+    }
+    BeforeEach 'prep-it'
 
-  It 'direct inclusion attempts of self'
-    When run run-it
-    The status should not be success
-    The stderr should equal "\
-FATAL:: '$PDIR/$LNAME' ('$LDIR/$LNAME') cannot load itself, use builtin(1) !!!"
+    It 'direct recursion - not self'
+      When run $Fname
+      The status should not be success
+      The stderr should equal "
+$Fname: line 4: source recursion detected"
+    End
   End
 
-  It 'direct recursion'
-    run-it() {
-      builtin echo ". $Fname" >$Fname
-      . $Fname
-    }
+  prep-it() {
+    sub=$SHELLSPEC_TMPBASE/sub.sh
+    builtin echo "
+#! /usr/bin/env
+. $PDIR/$LNAME
+. $sub
+" >$Fname
+    builtin echo ". $Fname" >$sub
+    chmod +x $Fname
+  }
 
-    When run run-it
+  BeforeEach 'prep-it'
+
+  It 'indirect recursion - not self'
+    When run $Fname
     The status should not be success
-    The stderr should equal \
-      "FATAL:: Recursive inclusion detected in '$Fname' !!!"
-  End
-
-  It 'indirect recursion'
-    run-it() {
-      sub=$SHELLSPEC_TMPBASE/sub.sh
-      builtin echo ". $sub" >$Fname
-      builtin echo ". $Fname" >$sub
-
-      . $Fname
-    }
-
-    When run run-it
-    The status should not be success
-    The stderr should equal \
-      "FATAL:: Recursive inclusion detected in '$Fname' !!!"
+    The stderr should equal "
+$Fname: line 1: indirect source recursion detected"
   End
 End
 
 Describe "non-extant file inclusion"
   Include $PDIR/$LNAME
 
-  Describe "continues silently for non & cursory verbose mode"
-  It 'continues silently for non-verbose mode (BASH_UTILS_SOURCE_VERBOSE=0)'
-      When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
-      The status should be success
-    End
+  NonExist=$SHELLSPEC_TMPBASE/non-exist.sh
 
-    It "continues silently when non-verbose mode (BASH_UTILS_SOURCE_VERBOSE=1)"
-      BASH_UTILS_SOURCE_VERBOSE=1
+  Context "bash-utils.source"
+    Describe "throws for all verbose modes"
+      Parameters
+        0
+        1
+        2
+      End
 
-      When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
-      The status should be success
-      The stdout should equal ''
+      Example "BASH_UTILS_SOURCE_ENH_REPORT=$1"
+        BASH_UTILS_SOURCE_ENH_REPORT=$1
+        When run . $NonExist
+        The status should not be success
+        The stderr should equal "
+$NonExist: source(1) target file not found"
+      End
     End
   End
 
-  It 'reports correctly when in verbose mode (BASH_UTILS_SOURCE_VERBOSE=2)'
-    BASH_UTILS_SOURCE_VERBOSE=2
-    When run bash-utils.ifsource $SHELLSPEC_TMPBASE/non-exist.sh
-    The status should be success
-    The stdout should equal "\
-Source: '$SHELLSPEC_TMPBASE/non-exist.sh' - Starting ... Done (not found)"
+  Context "bash-utils.ifsource"
+    Describe "continues silently for non & cursory verbose mode"
+      It 'continues silently for non-verbose mode (BASH_UTILS_SOURCE_ENH_REPORT=0)'
+        When run bash-utils.ifsource $NonExist
+        The status should be success
+      End
+
+      It "continues silently when non-verbose mode (BASH_UTILS_SOURCE_ENH_REPORT=1)"
+        BASH_UTILS_SOURCE_ENH_REPORT=1
+
+        When run bash-utils.ifsource $NonExist
+        The status should be success
+        The stdout should equal ''
+      End
+    End
+
+    It 'reports correctly when in verbose mode (BASH_UTILS_SOURCE_ENH_REPORT=2)'
+      BASH_UTILS_SOURCE_ENH_REPORT=2
+      When run bash-utils.ifsource $NonExist
+      The status should be success
+      The stdout should equal "\
+Source: $NonExist - Starting ... Done (not found)"
+    End
   End
 End
 
@@ -197,11 +244,110 @@ Describe "non-standard file names"
   
   Fnm="$SHELLSPEC_TMPBASE/my test.sh"
 
-  run-it() { builtin echo return > "$Fnm" ; . "$Fnm" ; }
+  prep-it() { builtin echo exit > "$Fnm" ; chmod +x "$Fnm" ; }
+
+  BeforeEach 'prep-it'
 
   It "file name containing whitespace - '$Fnm'"
-    When run run-it
+    When run "$Fnm"
     The status should be success
+  End
+End
+
+Describe "bash-utils.source() correctly reports source of non-extant file"
+  Root=$SHELLSPEC_TMPBASE/my-test
+  Top=$Root.sh
+  Sub1=$Root/sub1.sh Sub2=$Root/sub2.sh Sub3=$Root/sub3.sh
+
+  Describe "file/path not found"
+    
+    prep-it() {
+      mkdir -p $Root
+      cat<<!>$Top
+#! /usr/bin/env bash
+. $PDIR/$LNAME
+. $Sub1
+!
+      chmod +x $Top
+      cat<<!>$Sub1
+#! /usr/bin/env bash
+. $Sub2
+!
+      cat<<!>$Sub2
+#! /usr/bin/env bash
+. $Sub3
+!
+    }
+    
+    BeforeEach prep-it
+
+    It "non-extant $Sub3 - minimal report"
+      When run source $Top
+      The status should not be success
+      The stderr should equal "
+$Sub3: source(1) target file not found"
+    End
+
+    It "non-extant $Sub3 - enhanced report"
+      BASH_UTILS_SOURCE_ENHANCED_ERROR=true
+      When run source $Top
+      The status should not be success
+      The stderr should equal "
+$Sub3: source(1) target file not found
+In $Sub2: line 2
+In $Sub1: line 2
+In $Top: line 3"
+    End
+  End
+
+  Describe "syntax error"
+
+    prep-it() {
+      set +u
+      mkdir -p $Root
+      cat<<!>$Top
+#! /usr/bin/env bash
+. $PDIR/$LNAME
+
+. $Sub1
+!
+      chmod +x $Top
+      cat<<!>$Sub1
+#! /usr/bin/env bash
+. $Sub2
+!
+      cat<<!>$Sub2
+#! /usr/bin/e
+. $Sub3
+!
+      cat<<!>$Sub3
+#! /usr/bin/env bash
+case $fred in
+  *) : ;;
+esac
+!
+    }
+    
+    BeforeEach prep-it
+
+    It "syntax error - minimal report"
+      When run source $Top
+      The status should not be success
+      The stderr should equal "
+$Sub3: line 3: syntax error near unexpected token \`*'
+$Sub3: line 3: \` *) : ;;'"
+    End
+
+    It "syntax error - enhanced report"
+      BASH_UTILS_SOURCE_ENHANCED_ERROR=true
+      When run source $Top
+      The status should not be success
+      The stderr should equal "
+$Sub3: line 3: syntax error near unexpected token \`*'
+$Sub3.sh: line 3: \` *) : ;;'
+$Sub2: line 2
+$Sub1: line 2"
+    End
   End
 End
 
@@ -262,43 +408,44 @@ Describe 'ease of access'
 
       rm -fr $sub* ; mkdir -p $sub
 
-      builtin echo return > $lower
-      builtin echo "
+      cat<<!>$TOP
+#! /usr/bin/env bash
 . $PDIR/$LNAME
 . sub/lower.sh
-" >$TOP
+!
       chmod +x $TOP
+      builtin echo return > $lower
     }
 
     BeforeEach prep-it
 
     Context 'varying verbosity levels'
-      export BASH_UTILS_SOURCE_VERBOSE=
+      export BASH_UTILS_SOURCE_ENH_REPORT=
 
-      It "on the QT i.e. BASH_UTILS_SOURCE_VERBOSE=${BASH_UTILS_SOURCE_VERBOSE:-unset}"
-        When run $TOP
+      It "on the QT i.e. BASH_UTILS_SOURCE_ENH_REPORT=${BASH_UTILS_SOURCE_ENH_REPORT:-unset}"
+        When run source $TOP
         The status should be success
       End
 
-      export BASH_UTILS_SOURCE_VERBOSE=1
+      export BASH_UTILS_SOURCE_ENH_REPORT=1
 
-      It "BASH_UTILS_SOURCE_VERBOSE=$BASH_UTILS_SOURCE_VERBOSE"
-        When run $TOP
+      It "BASH_UTILS_SOURCE_ENH_REPORT=$BASH_UTILS_SOURCE_ENH_REPORT"
+        When run source $TOP
         The stdout should equal '
 .
 .'
       End
 
-      export BASH_UTILS_SOURCE_VERBOSE=2
+      export BASH_UTILS_SOURCE_ENH_REPORT=2
 
-      It "BASH_UTILS_SOURCE_VERBOSE=$BASH_UTILS_SOURCE_VERBOSE"
-        When run $TOP
+      It "BASH_UTILS_SOURCE_ENH_REPORT=$BASH_UTILS_SOURCE_ENH_REPORT"
+        When run source $TOP
         The stdout should equal "
 Source: '$PDIR/$LNAME' ('$LDIR/$LNAME') - Starting ... Done
 Source: 'sub/lower.sh' ('$TDIR/sub/lower.sh') - Starting ... Done"
       End
 
-      unset BASH_UTILS_SOURCE_VERBOSE
+      unset BASH_UTILS_SOURCE_ENH_REPORT
     End
   End
 
