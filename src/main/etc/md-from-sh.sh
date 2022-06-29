@@ -16,27 +16,35 @@
 # Author:       D. C. Pointon FIAP MBCS
 # Date:         May 2022
 ################################################################################
-# Allowed/recognized keywords
-readonly declare KeyWords=(
-  File Synopsis Description Opts Args Returns Variables Notes
-  'To Do' Author Date Copyright
-)
 
+# Allowed/recognized keywords
 # Section specific keyword orderings
-readonly declare CommonHeadings=(
-  Synopsis Description Opts Args Returns
-)
 readonly declare \
-  FuncDefHeadings=( Function ${CommonHeadings[@]} 'Env Vars' 'To Do' Notes ) \
+CommonHeadings=( Synopsis Description Opts Args Returns ) \
+CommonTrailings=( 'Env Vars' 'Doc Links' Notes Files 'To Do' )
+
+readonly declare \
+  FuncHeadings=( Function ${CommonHeadings[@]} ${CommonTrailings[@]} ) \
   ContentOrder=(
-    ${CommonHeadings[@]}
+    Title
+    "${CommonHeadings[@]}"
     Functions
-    Variables
-    Notes
-    'To Do'
+    "${CommonTrailings[@]}"
     Author
     Date
+    'License & Copyright'
+    License
     Copyright
   )
+
+declare -A Sections=() HeaderDerivations=( [title]=file )
+readonly declare AllHeaders=(
+  "${ContentOrder[@]}" "${FuncHeadings[@]}" "${HeaderDerivations[@]}"
+)
+
+declare section ; while read section ; do
+  case "${Sections[*]}" in *"$section"*) continue ;; esac
+  declare kwd=${section,,} ; Sections["$section"]=${kwd// /_}
+done < <(printf "%s\n" "${AllHeaders[@]}")
 
 #### END OF FILE
