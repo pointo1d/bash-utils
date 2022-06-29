@@ -343,10 +343,19 @@ line.doc._do-sect() {
   local keywd="${hdr// /_}" ; keywd=${keywd,,}
 
   # Attempt to validate the new section header
-  : ${!Sections[@]}
   case ${Sections["$hdr"]:-n} in
-    n)  # Not found, so it's merely a straightforward doc line
-        ;;
+    n)  # Not found, so see if it has an equivalent
+        keywd=${HeaderEquivs[$keywd]:-n}
+
+        case $keywd in
+          n)  # No equiv, so it's a straightforward doc line  - merely return
+              return
+              ;;
+          *)  # No equiv, so it's a straightforward doc line
+              :
+              ;;
+        esac
+        ;&
     *)  # Otherwise, it's known about, so 1st attempt to detect & warn about
         # repeated section header 
         case "${!Content[@]}${!Block[@]}" in

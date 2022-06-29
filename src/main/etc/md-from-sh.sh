@@ -37,7 +37,7 @@ readonly declare \
     Copyright
   )
 
-declare -A Sections=() HeaderDerivations=( [title]=file )
+declare -A Sections=() HeaderEquivs=( [file]=title )
 readonly declare AllHeaders=(
   "${ContentOrder[@]}" "${FuncHeadings[@]}" "${HeaderDerivations[@]}"
 )
