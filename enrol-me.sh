@@ -11,45 +11,8 @@
 #                 `.` and `source` function).
 # Docs:         [README.md](README.md), [enrol-me.sh](src/doc/enrol-me.sh).
 ###############################################O################################
-
-eval ${ENROL_ME_SH:-}
-readonly export ENROL_ME_SH=return
-
-# Load the errors core i.e. context agnostic, library
-#. $(dirname $BASH_SOURCE)/src/main/lib/errors.sh
-
-export Enrolments=()
-
-# ------------------------------------------------------------------------------
-# Description:   The enrolment function itself.
-# ------------------------------------------------------------------------------
-bash-utils.enrol() {
-  if ! test "${1:-}"; then return; fi
-  
-  local root_dir="" var_root="" prefix=""
-  while IFS=: read -r root_dir var_prefix prefix; do
-    local dir; for dname in '' bin sbin lib; do
-      # Set the directory path
-      local dir=$root_dir${dname:+/$dname}
-
-      # And the var name
-      dname=${dname^^}
-
-      local var="${var_prefix^^}_${dname:-ROOT}_DIR"
-
-      export $var=$dir
-      Enrolments+=( "${!var}" )
-
-      # Avoid unnecessary path updates
-      case $dname in LIB|ROOT) continue ;; esac
-
-      local path=":${PATH//::}:"
-      if test "$path" = "${path/:$dir:}" ; then
-        export PATH+=":${!var}"
-      fi
-    done
-  done < <(printf "%s\n" $1)
-}
+eval ${BASH_UTILS_ENROL_ME_SH:-}
+readonly export BASH_UTILS_ENROL_ME_SH=return
 
 # ------------------------------------------------------------------------------
 # Description:  Function to enrol the caller by...
@@ -65,69 +28,57 @@ bash-utils.enrol() {
 # Notes:        - The generated var names are upper case e.g. *_LIB_DIR. 
 # ------------------------------------------------------------------------------
 bash-utils.enrol-me() {
-  local root_dir="$(git rev-parse --show-toplevel 2>/dev/null)"
+  local print_it=t
 
-  if test "${root_dir:-}"; then
-    root_dir+=/src/main
-  fi
+  case "$(type -t ${FUNCNAME[1]})" in
+    builtin|\
+    function) unset print_it ;;
+  esac
 
-  # Do the enrolment(s) themselves - starting with self
-  local e; for e in "$root_dir:BASH_UTILS:" "$@"; do
-    bash-utils.enrol "$e"
-  done
-}
+  local root_dir="" var_root="" prefix=""
+  while IFS=: read -r root_dir var_prefix prefix; do
+    local dir; for dname in '' bin lib sbin; do
+      # Set the directory path
+      local dir=$root_dir${dname:+/$dname}
 
-# ------------------------------------------------------------------------------
-# Description:  Function to enrol the caller by...
-#               - Exporting variables defined relative to this script into the
-#                 callers run-time context.
-#               - If given, exporting variables defined relative to the
-#                 given location(s) into the callers run-time context.
-#               - Appending the appropriate paths to the callers $PATH.
-# ------------------------------------------------------------------------------
-bash-utils.lib-include() {
-  fatal() { builtin echo "FATAL: $* !!!" >&2; exit 1; }
+      # And the var name
+      dname=${dname^^}
 
-  if test $# -eq 0; then fatal "Nothing to include"; fi
+      local var="${var_prefix^^}_${dname:-ROOT}_DIR"
 
-  local caller=${FUNCNAME[1]} dirs=( "${Enrolments[@]}" ${PATH//:} )
+      local str="export $var=$dir"
 
-  local lib; for lib; do
-    local orig=$lib
-
-    local found; for found in "${dirs[@]}"; do
-      if test -f $lib; then
-        found=$lib
-      elif test -f $found/$lib; then
-        found=$found/$lib
-      elif test -f $found/$lib.sh; then
-        found=$found/$lib.sh
+      if test "${print_it:-}"; then
+        builtin echo "$str"
       else
-        unset found
+        eval $str
       fi
 
-      if test "${found:-}"; then break; fi
-    done
+      # Avoid unnecessary path updates
+      case $dname in LIB|ROOT) continue ;; esac
 
-    if test "${found:-}"; then
-      builtin $caller $found
-    else
-      fatal "File not found for library: '$orig'"
-    fi
-  done
+      local path=":${BASH_UTILS_LD_LIB_PATH:-}:"
+      if test "$path" = "${path/:$dir:}" ; then
+        export PATH="$PATH:${!var}"
+        export BASH_UTILS_LD_LIB_PATH+=":${!var}"
+      fi
+    done
+  done < <(printf "%s\n" $1)
+
+  if test "${print_it:-}"; then
+    builtin echo \
+      'export PATH=$PATH:$BASH_UTILS_ROOT_DIR:$BASH_UTILS_SBIN_DIR:$BASH_UTILS_BIN_DIR'
+  fi
 }
 
-# Define the builtin file inclusion overrides
-.() { bash-utils.lib-include "$@"; }
-
-source() { bash-utils.lib-include "$@"; }
-
-export -f . source
-
-# Adjust the args (to remove the invocation of this script)
-shift 2
+################################################################################
+################################################################################
+########                         MAIN BODY                              ########
+################################################################################
+################################################################################
+declare root_dir="$(git rev-parse --show-toplevel 2>/dev/null)"
 
 # and process the/any user supplied args
-bash-utils.enrol-me "$@"
+bash-utils.enrol-me ${root_dir:-$PWD}/src/main:BASH_UTILS:
 
 #### END OF FILE

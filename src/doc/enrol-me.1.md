@@ -1,73 +1,50 @@
-# enrol-ms.sh(1)
+# enrol-me.sh(1)
 
-A script to provide the interface to the bash-utils library.
+A script providing the run-time (interactive) session interface to the
+bash-utils library.
 
-# SYNOPSIS
-    (|.source] enrol-me.sh [[PREFIX]:[VAR_PREFIX]:[DIR]...]
+## SYNOPSIS
 
-# WHERE
+`bash enrol-me.sh`
 
-`PREFIX`
-: Defines a prefix with which the caller specifies their own libraries (for use
-  when the caller has a library script whose filename clashes with one of thoee
-  provisioned wherein.
+## DESCRIPTION
 
-`VAR_PREFIX`
-: Defines a prefix for the auto-generated variable names.
+This script provisions the primary interface to the bash-utils library for
+(interactive) bash(1) sessions by way of generating the following to STDOUT...
 
-`DIR`
-: Defines root directory to be employed as the root directory.
+- A set of environment variable definitions - see [VARIABLES](#variables) below.
+- A suitably adjusted version of the callers `$PATH` variable whereby the
+  adjustment comprises the appending of the `BASH_UTILS_BIN_DIR` &
+  `BASH_UTILS_SBIN_DIR` to the callers `PATH`.
 
-For details of both of the above, see [ENVIRONMENT VARIABLES](#environment-variables) (below).
-
-# DESCRIPTION
-
-This script provisions the primary interface to the bash-utils library ... as an
-integral part of which is an addition by way of overriding functions for the
-builtin bash(1) `source` and `.` functions whereby the overrides also provide
-for the following enhanced functional features...
-
-- Recursive file inclusion avoidance measures - by both...
-  - Readonly macro (environment variable definition) and...
-  - Pre-inclusion inspection of the _bash_(1) `$BASH_SOURCE` associative array.
-- Ease of access to consumer binary and library directories in addition to this
-  suite of library scripts.
-- Selective reporting of library script inclusion. 
-
-# FUNCTIONS
-
-As with the builtins themselves, the 2 functions provisioned herein are
-synonyms.
-
-## .(), source()
-
-### Synopsis
-
-    (source|.) LIB [LIB...]
+The above are either echoed to stdout or, optionally appended to the specified
+file.
 
 ### Where
+ 
+`-a STR`
+: Specifies the file to which the definitions s/b appended (instead of stdout).
 
-LIB
-: is a library script to be included - which is typically of the form of a
-file base name (with, or without the extension/postfix) library and may, or may
-not, be prepended with the caller supplied `PREFIX` (the only mandatory use is
-in circumstances whereby the prefix is needed to disambiguate between file base
-names.
 
-### Variables
+## VARIABLES
 
-`BASH_UTILS_INCLUDE_VERBOSE`
-: Define the verbosity level of the reporting of file inclusions.
+As mentioned above, the following are all echoed to STDOUT for the caller to
+disposition as they see fit (typically, appending to their `.bashrc`/`.profile`
+files)...
 
-# ENVIRONMENT VARIABLES
-
-`BASH_UTILS_ROOT_DIR`, `BASH_UTILS_BIN_DIR` `BASH_UTILS_LIB_DIR` `BASH_UTILS_SBIN_DIR`
+`BASH_UTILS_ROOT_DIR`, `BASH_UTILS_BIN_DIR`, `BASH_UTILS_LIB_DIR`, `BASH_UTILS_SBIN_DIR`
 : These variables are calculated relative to the location of the `enrol-me.sh`
-script and recorded and exported into the callers environment; additionally, the
-non-`LIB` paths conveyed are appended to the callers `$PATH` variable.
+  script, listed on STDOUT and exported into the callers environment - the
+  latter for immediate use as required.
 
-In addition, for each pair of `PREFIX` and `DIR` arguments provided by the
-caller, similar is true i.e. the variables are calculated relative to the given
-`DIR` and recorded and exported into the callers environment; additionally, the
-non-`LIB` paths conveyed are appended to the callers `$PATH` variable.
+`PATH`
+: An adjusted value of the callers PATH (adjusted as above).
+
+`BASH_UTILS_LIB`
+: Defines the absolute location of the run-time `bash-utils.sh` library.
+
+## NOTES
+
+- In cases whereby the `-a` option has been employed (see [Where](#where)
+  above), any existing entries matching `BASH_UTILS_.*_DIR` will be updated.
 
