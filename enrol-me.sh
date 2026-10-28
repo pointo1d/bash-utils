@@ -11,8 +11,9 @@
 #                 `.` and `source` function).
 # Docs:         [README.md](README.md), [enrol-me.sh](src/doc/enrol-me.sh).
 ###############################################O################################
+# shellcheck disable=SC2086
 eval ${BASH_UTILS_ENROL_ME_SH:-}
-readonly export BASH_UTILS_ENROL_ME_SH=return
+declare -grx BASH_UTILS_ENROL_ME_SH=return
 
 # ------------------------------------------------------------------------------
 # Description:  Function to enrol the caller by...
@@ -35,40 +36,39 @@ bash-utils.enrol-me() {
     function) unset print_it ;;
   esac
 
-  local root_dir="" var_root="" prefix=""
+  local root_dir="" var_prefix="" prefix="" postfix=""
   while IFS=: read -r root_dir var_prefix prefix; do
+    : $prefix
     local dir; for dname in '' bin lib sbin; do
       # Set the directory path
       local dir=$root_dir${dname:+/$dname}
 
       # And the var name
-      dname=${dname^^}
+      local vname=${dname:-root}
 
-      local var="${var_prefix^^}_${dname:-ROOT}_DIR"
+      local var="${var_prefix^^}_${vname^^}_DIR"
 
       local str="export $var=$dir"
 
-      if test "${print_it:-}"; then
-        builtin echo "$str"
-      else
-        eval $str
-      fi
+      eval "$str"
+
+      if test "${print_it:-}"; then builtin echo "$str"; fi
 
       # Avoid unnecessary path updates
-      case $dname in LIB|ROOT) continue ;; esac
+      if test "$dname" = lib; then continue; fi
 
       local path=":${BASH_UTILS_LD_LIB_PATH:-}:"
-      if test "$path" = "${path/:$dir:}" ; then
-        export PATH="$PATH:${!var}"
-        export BASH_UTILS_LD_LIB_PATH+=":${!var}"
-      fi
+      if test "$path" = "${path/:$dir:}" ; then postfix+=":$dir"; fi
     done
   done < <(printf "%s\n" $1)
 
-  if test "${print_it:-}"; then
-    builtin echo \
-      'export PATH=$PATH:$BASH_UTILS_ROOT_DIR:$BASH_UTILS_SBIN_DIR:$BASH_UTILS_BIN_DIR'
-  fi
+  declare str="export BASH_UTILS_LD_LIB_PATH=$postfix"
+  eval "$str"
+  if test "${print_it:-}"; then builtin echo "$str"; fi
+
+  str="export PATH=$PATH$postfix"
+  eval "$str"
+  if test "${print_it:-}"; then builtin echo "$str"; fi
 }
 
 ################################################################################
@@ -76,9 +76,10 @@ bash-utils.enrol-me() {
 ########                         MAIN BODY                              ########
 ################################################################################
 ################################################################################
+# shellcheck disable=SC2086,SC2155
 declare root_dir="$(git rev-parse --show-toplevel 2>/dev/null)"
 
 # and process the/any user supplied args
-bash-utils.enrol-me ${root_dir:-$PWD}/src/main:BASH_UTILS:
+bash-utils.enrol-me "${root_dir:-$PWD}/src/main:BASH_UTILS:"
 
 #### END OF FILE
