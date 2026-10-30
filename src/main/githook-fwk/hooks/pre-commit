@@ -71,19 +71,26 @@ declare path; while read path; do
   fi
 
   case $path in
-    *.sh) if bash -n "$path" >$log 2>&1; then
-            if shellcheck $path >$log 2>&1; then
-              # Syntax & lint checks passed, so attempt to find associated unit
-              # test(s)
-              find src/test -name "*${path##*/}*" | while read f; do
-                ( set +x; shellspec $f ) 2>&1 | tee $log
-                if test $? -eq 0; then >$log; fi
-              done
-              wc -l $log
+    *.sh)     if bash -n "$path" >$log 2>&1; then
+              if shellcheck $path >$log 2>&1; then
+                # Syntax & lint checks passed, so attempt to find associated
+                # unit test(s)
+                find src/test -name "*${path##*/}*" | while read f; do
+                  ( set +x; shellspec $f ) 2>&1 | tee $log
+                  if test $? -eq 0; then >$log; fi
+                done
+                wc -l $log
+              fi
             fi
-          fi
-          ;;
-    *.md) mdl $path >$log 2>&1 ;;
+            ;;
+    *.json)   if sed '/#/s,#.*,,' $path | jq -e >$log 2>&1; then >$log; fi ;;
+    *.md)     mdl $path >$log 2>&1 ;;
+    *.p[lm])  perl -c $path >$log 2>&1 ;;
+    *.py)     python -c $path >$log 2>&1 ;;
+    *.rb)     if ruby -c $path >$log 2>&1; then
+                rubocop $path >$log 2>&1
+              fi
+              ;;
   esac
 
   if test -s $log; then

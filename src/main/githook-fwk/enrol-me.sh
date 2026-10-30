@@ -45,7 +45,9 @@ if test ${#RepoRoot} -eq 0; then
   exit 1
 fi
 
+declare AbsPath=$(cd ${BASH_SOURCE%/*} >&/dev/null; pwd)
+
 # shellcheck disable=SC2086
-git -C "$RepoDir" config core.hooksPath "${BASH_SOURCE%/*}/hooks"
+git -C "$RepoDir" config core.hooksPath "$AbsPath/hooks"
 
 #### END OF FILE
