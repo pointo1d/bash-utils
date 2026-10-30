@@ -37,7 +37,7 @@ if ! test -d "$RepoDir"; then
   exit 1
 fi
 
-# shellcheck disable=SC2155
+# shellcheck disable=SC2155,SC2164
 declare RepoRoot="$(cd "$RepoDir"; git rev-parse --show-toplevel 2>/dev/null)"
 
 if test ${#RepoRoot} -eq 0; then
@@ -45,6 +45,7 @@ if test ${#RepoRoot} -eq 0; then
   exit 1
 fi
 
+# shellcheck disable=SC2155,SC2164
 declare AbsPath=$(cd ${BASH_SOURCE%/*} >&/dev/null; pwd)
 
 # shellcheck disable=SC2086
