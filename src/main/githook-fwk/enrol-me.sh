@@ -32,15 +32,20 @@ done
 
 shift $((OPTIND - 1))
 
+if ! test -d "$RepoDir"; then
+  builtin echo -e "FATAL: Directory not found: '$RepoDir'" >&2
+  exit 1
+fi
+
 # shellcheck disable=SC2155
-declare RepoRoot="$(git -C$RepoDir rev-parse --show-toplevel 2>/dev/null)"
+declare RepoRoot="$(cd "$RepoDir"; git rev-parse --show-toplevel 2>/dev/null)"
 
 if test ${#RepoRoot} -eq 0; then
-  builtin echo -e "FATAL: Caller dir not a Git repository: '$RepoDir'"
+  builtin echo -e "FATAL: Not a Git repository: '$RepoDir'" >&2
   exit 1
 fi
 
 # shellcheck disable=SC2086
-git config core.hooksPath $RepoRoot/${BASH_SOURCE%/*}/hooks
+git -C "$RepoDir" config core.hooksPath "${BASH_SOURCE%/*}/hooks"
 
 #### END OF FILE
