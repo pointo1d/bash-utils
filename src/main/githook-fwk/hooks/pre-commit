@@ -6,6 +6,24 @@
 : ${GITHOOK_FWK_DEBUG:-}
 eval ${GITHOOK_FWK_DEBUG:+shopt -os xtrace}
 
+# shellcheck disable=SC2155
+declare GitRoot="$(git rev-parse --show-toplevel)" NonCommit=""
+if test $# -ne 0; then NonCommit=t; fi
+
+declare Summary=0 Against=HEAD
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+  # Initial commit: diff against an empty tree object
+  Against=$(git hash-object -t tree /dev/null)
+fi
+
+# If you want to allow non-ASCII filenames set this variable to true.
+allownonascii=$(git config --type=bool hooks.allownonascii)
+
+# Redirect output to stderr.
+exec 1>&2
+
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 run-check() {
   local cmd=$1 cmd_str="$1" path="$2"
   # shellcheck disable=SC2059
@@ -14,35 +32,24 @@ run-check() {
   (
     set +x
     exec >"$log" 2>&1
-    eval "$cmd"
+    eval $cmd
   )
 
-  if test $? -ne 0; then
+  local rc=$?
+
+  if test $rc -ne 0; then
     cat<<EOT >&2
 Pre-commit: Check ('$cmd') failed for file: '$path'
 $(<"$log")
 EOT
-    exit 1
+
   else
     builtin echo -e "Pre-commit: Check ('$cmd') passed for file: '$path'" >&2
   fi
+  ((Summary += rc))
+
+  return $rc
 }
-
-if test "${GITHOOK_FWK_DEBUG:-}"; then shopt -so xtrace; fi
-
-if git rev-parse --verify HEAD >/dev/null 2>&1
-then
-	against=HEAD
-else
-	# Initial commit: diff against an empty tree object
-	against=$(git hash-object -t tree /dev/null)
-fi
-
-# If you want to allow non-ASCII filenames set this variable to true.
-allownonascii=$(git config --type=bool hooks.allownonascii)
-
-# Redirect output to stderr.
-exec 1>&2
 
 # Cross platform projects tend to avoid non-ASCII filenames; prevent
 # them from being added to the repository. We exploit the fact that the
@@ -52,7 +59,7 @@ if [ "$allownonascii" != "true" ] &&
   # Note that the use of brackets around a tr range is ok here, (it's even
   # required, for portability to Solaris 10's /usr/bin/tr), since the square
   # bracket bytes happen to fall in the designated range.
-  test $(git diff --cached --name-only --diff-filter=A -z $against |
+  test $(git diff --cached --name-only --diff-filter=A -z $Against |
     LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
 then
 	cat <<\EOF
@@ -69,12 +76,12 @@ EOF
 	exit 1
 fi
 
-declare Paths=(); readarray Paths < <(
-  if test $# -ne 0; then
+declare Paths=() Ignores=(); readarray Paths < <(
+  if test "${NonCommit:-}"; then
     printf "M\t%s\n" "$@"
   else
     # shellcheck disable=SC2086
-    git diff $against --name-status
+    git diff $Against --name-status
   fi
 )
 
@@ -83,11 +90,26 @@ if test ${#Paths[@]} -eq 0; then
   exit 0
 fi
 
+if test -s $GitRoot/.gitignore.pre-commit; then
+  readarray -t Ignores < $GitRoot/.gitignore.pre-commit
+fi
+
 declare status from to
+declare -A Summary=( [passed]=0 [failed]=0 [ignored]=0 )
 # shellcheck disable=SC2034
 while IFS="	" read -r status from to; do
   declare path="${to:-$from}"
+
   if test "${path:-}" = ""; then continue; fi
+
+  : "${NonCommit:-}:${Ignores[*]}"
+  case "${NonCommit:-}:${Ignores[*]}" in
+    :*$path*) builtin echo -e \
+                "Pre-commit: Check(s) ignored by user for file: '$path'" >&2
+              ((Summary[ignored] += 1))
+              continue
+              ;;
+  esac
 
   declare log=/var/tmp/${path##*/}.log
   # shellcheck disable=SC2064
@@ -117,13 +139,13 @@ while IFS="	" read -r status from to; do
   esac
 
   case $magic in
-    spec)   run-check "shellspec --syntax-check \"%s\"" "$path" ;;
-    sh)     if run-check "bash -n \"%s\"" "$path"; then
-              if run-check "shellcheck \"%s\"" "$path"; then
+    spec)   run-check 'shellspec --syntax-check "%s"' "$path" ;;
+    sh)     if run-check 'bash -n "%s"' "$path"; then
+              if run-check 'shellcheck "%s"' "$path"; then
                 # Syntax & lint checks passed, so finally attempt to find
                 # associated unit test(s)
                 while read -r f; do
-                  run-check "shellspec \"%s\"" $f
+                  run-check 'shellspec -fd "%s"' $f
                 done < <(
                   # shellcheck disable=SC2063
                   git ls-files -c --exclude-standard |
@@ -132,26 +154,46 @@ while IFS="	" read -r status from to; do
               fi
             fi
             ;;
-    json)   run-check "sed '/#/s,#.*,,' \"%s\" | jq -e" "$path" ;;
-    md)     run-check "mdl \"%s\"" "$path" ;;
-    p[lm])  run-check "perl -c \"%s\"" "$path" ;;
-    py)     run-check "python -c \"%s\"" "$path" ;;
-    rb)     if run-check "ruby -c \"%s\"" "$path"; then
-                run-check "rubocop \"%s\"" "$path"
-              fi
-              ;;
+    json)   run-check 'sed "/#/s,#.*,," "%s" | jq -e' "$path" ;;
+    md)     run-check 'mdl "%s"' "$path" ;;
+    p[lm])  run-check 'perl -c "%s"' "$path" ;;
+    py)     run-check 'python -c "%s"' "$path" ;;
+    rb)     if run-check 'ruby -c "%s"' "$path"; then
+              run-check 'rubocop "%s"' "$path"
+            fi
+            ;;
+    *)      continue ;;
   esac
+
+  # check for whitespace errors
+  # shellcheck disable=SC2016
+  run-check 'git diff-index --check --cached $Against -- "%s"' $path
+
+  if test $Summary -eq 0; then
+    ((Summary[passed] += 1))
+  else
+    ((Summary[failed] += 1))
+    if test "${GITHOOK_FWK_FAST_FAIL:-}"; then break; fi
+  fi
 done < <(printf "%s\n" "${Paths[@]}")
 
-if test $# -eq 0; then
-  # If there are whitespace errors, print the offending file names and fail.
-  # shellcheck disable=SC2086
-  git diff-index --check --cached $against --
+if test ${Summary[ignored]} -ne 0; then
+  builtin echo -e \
+    "Pre-commit: Check(s) ignored for ${Summary[ignored]} file(s) !!!" >&2
 fi
 
-if test "${GITHOOK_FWK_COMMIT_FAIL:-}"; then
-  builtin echo -e "Pre-commit: Check(s) failed (user abort)" >&2
-  exit 1
+if test ${Summary[failed]} -ne 0; then
+  builtin echo -e \
+    "Pre-commit: Check(s) failed for ${Summary[failed]} file(s) !!!" >&2
+else
+  builtin echo -e \
+    "Pre-commit: Check(s) passed for ${Summary[passed]} file(s) !!!" >&2
+
+  if test "${GITHOOK_FWK_COMMIT_FAIL:-}"; then
+    builtin echo -e "Pre-commit: User abort !!!" >&2
+  fi
 fi
+
+exit ${Summary[failed]}
 
 #### END OF FILE

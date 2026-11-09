@@ -1,0 +1,4 @@
+fred = %t
+
+NVDVDvdvdvlmad'vlkmndc
+
