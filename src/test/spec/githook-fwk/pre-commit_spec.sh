@@ -17,8 +17,6 @@ declare \
   PrepIt=$SHELLSPEC_WORKDIR/prep-it
 declare RepoIgnore=$TestRepoRoot/.gitignore.pre-commit
 
-
-
 Describe "$OUT"
   declare SrcMain="${SHELLSPEC_PROJECT_ROOT}/src/main"
 
@@ -85,7 +83,9 @@ Describe "$OUT"
       cp-files() {
         git init -q $TestRepoRoot
         bash $EnrolMeSh -d $TestRepoRoot
-        cp $TestDataDir/failed.* $TestRepoRoot/
+        local f; while read f; do
+          cp $f $TestRepoRoot/
+        done < <(git ls-files | grep $TestDataDir/failed)
         git -C $TestRepoRoot/ add .
       }
 
@@ -93,9 +93,12 @@ Describe "$OUT"
 
       Describe "checks all correctly (and fails)"
         Example "all paths fail"
+          declare count="$(ls -1 $TestRepoRoot/failed* | wc -l)"
+
           When run command git -C $TestRepoRoot/ commit -qm'.'
           The status should not be success
-          The stderr should include "Pre-commit: Check(s) failed for 5 file(s)"
+          The stderr should include \
+            "Pre-commit: Check(s) failed for $count file(s)"
         End
       End
 
@@ -118,9 +121,12 @@ Describe "$OUT"
         Before set-ignore
 
         Example "all paths succeeds"
+          declare count="$(ls -1 $TestRepoRoot/failed* | wc -l)"
+
           When run command git -C $TestRepoRoot/ commit -qm'.'
           The status should be success
-          The stderr should include "Pre-commit: Check(s) ignored for 5 file(s)"
+          The stderr should include \
+            "Pre-commit: Check(s) ignored for $count file(s)"
         End
       End
     End

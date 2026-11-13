@@ -81,7 +81,7 @@ declare Paths=() Ignores=(); readarray Paths < <(
     printf "M\t%s\n" "$@"
   else
     # shellcheck disable=SC2086
-    git diff $Against --name-status
+    git diff $Against --name-status --staged
   fi
 )
 
