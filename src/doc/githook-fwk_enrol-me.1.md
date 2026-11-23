@@ -1,7 +1,6 @@
 # githook-fwk_enrol-me.sh(1)
 
-A script providing the means to enrol the caller with the githook framework
-element within this bash-utils library.
+A script that provides the means to enrol the caller with the githook framework.
 
 ## SYNOPSIS
 
@@ -11,11 +10,22 @@ bash $BASH_UTILS_LIB_DIR/githook-fwk/enrol-me.sh [-d DIR]
 ```
 
 ### Where
+
 `-d DIR`
-: Specifies an alternate Git repository directory (or subdirectory thereof),
-  default - `$PWD`.
+: Specifies the Git repository directory (or a subdirectory thereof), for the
+  enrolling repository, default - `$PWD`.
 
 ## DESCRIPTION
 
-This script provides the mean to register the caller as a consumer of the git
-hook(s) framework contained herein.
+This script provides the mean to enrol the caller as a consumer of the githook
+framework contained herein - doing so in a manner that enables the enroller to
+...
+
+- Maintain the/any existing hooks employed by the enrolling repository.
+- Call the default hook helper functions provided by this repository.
+
+## FILES
+
+`.githook-enrolments`
+: The record of enrolments maintained as an ignored file within the root
+  directory of this repository clone.
