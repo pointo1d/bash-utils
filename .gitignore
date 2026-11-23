@@ -11,4 +11,7 @@
 **/*.orig
 **/*.sav
 
+# Githook framework enrolments record
+.githook-framework-enrolments
+
 #### END OF FILE
